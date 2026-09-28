@@ -1,0 +1,8 @@
+# torch/torchvision은 CPU 버전 설치 예:
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+torch==2.14.0
+torchvision==0.29.0
+numpy==2.2.6
+scipy==1.15.3
+matplotlib==3.10.9
+sounddevice==0.5.6

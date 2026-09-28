@@ -1,0 +1,21 @@
+# conda env create -f environment.yml
+# conda activate eece101
+#
+# conda는 Python + 환경 관리만 맡고, 패키지는 전부 pip 휠로 설치한다.
+# (Windows에서 conda-forge numpy(MKL)와 pip torch를 섞으면 DLL 충돌로 파이썬이 죽는 경우가 있음)
+name: eece101
+channels:
+  - conda-forge
+  - nodefaults    # anaconda 기본 채널(약관 동의 필요) 대신 conda-forge만 사용
+dependencies:
+  - python=3.10
+  - pip
+  - pip:
+      # GPU(NVIDIA)가 있으면 whl/cpu -> whl/cu126 등으로 변경
+      - --extra-index-url https://download.pytorch.org/whl/cpu
+      - torch==2.14.0
+      - torchvision==0.29.0
+      - numpy==2.2.6
+      - scipy==1.15.3
+      - matplotlib==3.10.9
+      - sounddevice==0.5.6
