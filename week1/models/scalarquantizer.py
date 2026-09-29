@@ -58,6 +58,9 @@ class ScalarQuantizer(nn.Module):
     ##############################WCML PROJECT (START)######################################
     # 모든 양자화기를 "z -> 인덱스(송신 심볼) -> 복원값" 두 단계로 나눠 구현한다.
     # 인덱스 단계가 있어야 비트스트림으로 바꿔 채널에 보낼 수 있기 때문.
+    #
+    # ★ TODO 채우는 법: `raise NotImplementedError(...)` 줄을 **지우고** 그 자리에 코드를 쓴다.
+    #   (raise 줄이 남아 있으면 그 위에 코드를 써도 항상 에러가 나서 [TODO]로 채점됨)
 
     # ---------- 1) Uniform ----------
     def uniform_index(self, z, B):
@@ -66,6 +69,7 @@ class ScalarQuantizer(nn.Module):
         #   힌트) (z + 1) / 2 는 [0, 1] 범위 -> 여기에 L을 곱하고 torch.floor
         #         z = 1 이면 L이 나오므로 .clamp(0, L - 1) 로 잘라주고, 마지막에 .long()
         #   예) B=2: z=-0.6 -> 0,  z=0.2 -> 2,  z=1.0 -> 3
+        #   ▶ 아래 raise 줄을 지우고, 계산한 칸 번호를 return
         raise NotImplementedError("TODO 1-1 uniform_index")
 
     def uniform_value(self, idx, B):
@@ -73,6 +77,7 @@ class ScalarQuantizer(nn.Module):
         # TODO 1-2: 칸 폭 step = 2 / 2^B 일 때, k번째 칸의 가운데 값 = -1 + (k + 0.5) * step
         #   힌트) idx는 정수 텐서이므로 idx.float() 로 바꿔서 계산
         #   예) B=2: [0, 1, 2, 3] -> [-0.75, -0.25, 0.25, 0.75]
+        #   ▶ 아래 raise 줄을 지우고, 계산한 값을 return
         raise NotImplementedError("TODO 1-2 uniform_value")
 
     def uniform_quantization(self, z, B):
@@ -84,11 +89,13 @@ class ScalarQuantizer(nn.Module):
         # 0 근처를 넓게 펴 주는 압축 함수 F(z) = sgn(z) ln(1+mu|z|) / ln(1+mu)
         # TODO 2-1: 위 식을 한 줄로
         #   힌트) torch.sign, torch.log1p(x) = ln(1+x), z.abs(), np.log1p(self.mu)
+        #   ▶ 아래 raise 줄을 지우고 return 한 줄로
         raise NotImplementedError("TODO 2-1 mu_compress")
 
     def mu_expand(self, y):
         # 압축의 역함수 F^-1(y) = sgn(y) ((1+mu)^|y| - 1) / mu
         # TODO 2-2: 위 식을 한 줄로  (mu_expand(mu_compress(z)) == z 가 되어야 함)
+        #   ▶ 아래 raise 줄을 지우고 return 한 줄로
         raise NotImplementedError("TODO 2-2 mu_expand")
 
     def mu_law_quantization(self, z, B):
@@ -111,6 +118,8 @@ class ScalarQuantizer(nn.Module):
         #         new_levels = torch.where(cnts > 0, 합 / 개수, levels)   (0으로 나누지 않게 cnts.clamp(min=1))
         #   (for k in range(L) 반복문으로 풀어도 된다. 다만 B=8이면 느림)
         #   예) samples=[-1, -0.8, 0.5, 0.7], levels=[-0.5, 0.5] -> [-0.9, 0.6]
+        #   ▶ 아래 raise 줄을 지우고 그 자리에 코드를 쓰기.
+        #     결과는 반드시 `new_levels` 라는 이름의 변수에 담기 (맨 아래 return 줄이 new_levels 를 씀)
         raise NotImplementedError("TODO 3 lloyd_max_step")
         return torch.sort(new_levels).values
 
@@ -158,6 +167,7 @@ class ScalarQuantizer(nn.Module):
         #   codebook   = mean((z_q - sg[z])^2)   -> 레벨만 움직임 (z는 고정)
         #   commitment = mean((sg[z_q] - z)^2)   -> 인코더만 움직임 (레벨은 고정)
         #   sg[x] (stop-gradient) 는 PyTorch에서 x.detach()
+        #   ▶ 아래 raise 줄을 지우고 loss 를 return
         raise NotImplementedError("TODO 4 level_loss")
 
     # ---------- 공통: 인덱스 <-> 값 ----------

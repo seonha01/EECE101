@@ -104,7 +104,7 @@ def main(args):
         for B in args.Bs:
             path = os.path.join(utils.CKPT_DIR, f"{method}_B{B}.pth")
             if not os.path.exists(path):
-                print(f"[skip] {path} 없음 -> python main.py --method {method} --B {B}")
+                print(f"[skip] {method} B={B}: 학습한 모델 없음 (건너뜀)")
                 continue
             model, _ = utils.load_checkpoint(path, device)
             model.scalar_quantization.gray = args.gray

@@ -5,15 +5,17 @@
 ```
 
 **컴퓨터에 아무것도 설치되어 있지 않다고 가정하고** 처음부터 설명합니다.
-순서대로 따라 하면 30분 정도 걸립니다 (대부분 다운로드 기다리는 시간).
 Windows 기준이고, Mac은 각 단계의 **[Mac]** 부분을 보세요.
 
-| 단계 | 할 일 | 한 번만? |
-|---|---|---|
-| 1 | 코드 받기 (ZIP) | 과제가 올라올 때마다 |
-| 2 | Miniforge(conda) 설치 | 한 번만 |
-| 3 | 과제용 환경 만들기 | 한 번만 |
-| 4 | 과제 시작 | 매번 |
+| 단계 | 할 일 | 걸리는 시간 | 언제 |
+|---|---|---|---|
+| 1 | 코드 받기 (ZIP) | 1분 | 과제가 올라올 때마다 |
+| 2 | Miniforge(conda) 설치 | 5~10분 | 한 번만 |
+| 3 | 과제용 환경 만들기 | 10~30분 (다운로드) | 한 번만 |
+| 4 | 데이터 넣기 | 1분 (받은 폴더 복사) / **30분 이상** (직접 다운로드) | 한 번만 |
+| 5 | 과제 시작 | 과제 README 참고 (1주차: 4~6시간) | |
+
+설치(1~4단계)는 **넉넉히 1시간** 잡으세요. 대부분은 다운로드를 기다리는 시간입니다.
 
 ---
 
@@ -124,7 +126,38 @@ Windows 기준이고, Mac은 각 단계의 **[Mac]** 부분을 보세요.
 
 ---
 
-## 4단계. 과제 시작
+## 4단계. 데이터 넣기 (CIFAR-100 이미지)
+
+과제에 쓰는 이미지 데이터(약 170MB)입니다.
+
+### 방법 A (권장): 조교에게 받은 `data` 폴더 넣기
+
+조교가 USB나 드라이브로 나눠 준 **`data` 폴더를 `C:\EECE101-main` 안에 그대로 복사**하세요.
+아래처럼 되면 맞습니다.
+
+```
+C:\EECE101-main\data\cifar-100-python\train
+C:\EECE101-main\data\cifar-100-python\test
+C:\EECE101-main\data\cifar-100-python\meta
+```
+
+### 방법 B: 직접 다운로드
+
+받은 폴더가 없으면 직접 받습니다. **서버가 느려서 30분 이상 걸릴 수 있습니다.**
+
+```
+cd /d C:\EECE101-main
+python download_data.py
+```
+
+- 진행률과 남은 시간이 표시됩니다. 숫자가 천천히라도 올라가면 정상이니 **창을 닫지 말고 기다리세요.**
+- 중간에 끊기거나 실수로 창을 닫아도 괜찮습니다. **같은 명령을 다시 실행하면 받던 곳부터 이어서** 받습니다.
+- 마지막에 `완료:`가 나오면 끝입니다.
+- 3단계(환경 만들기)가 끝나자마자 이걸 먼저 시작해 두고, 기다리는 동안 과제 README를 읽으면 시간이 절약됩니다.
+
+---
+
+## 5단계. 과제 시작
 
 ```
 conda activate eece101
@@ -138,12 +171,6 @@ python check_week1.py
   설치 후 **File → Open Folder** 로 `C:\EECE101-main` 을 열면 왼쪽에 파일 목록이 보입니다.
   `.md` 파일은 오른쪽 위 미리보기 버튼(돋보기 달린 아이콘)을 누르면 보기 좋게 보입니다.
 - 명령 실행은 계속 **Miniforge Prompt**에서 하면 됩니다.
-
-### 데이터 (CIFAR-100)
-
-처음 실행할 때 `C:\EECE101-main\data` 폴더에 **자동으로 다운로드**됩니다 (약 170MB).
-서버가 느려서 오래 걸리거나 중간에 끊길 수 있습니다. 조교에게 `data` 폴더를 받았다면
-`C:\EECE101-main\data` 위치에 넣으세요.
 
 ---
 
@@ -175,6 +202,8 @@ python main.py --method uniform --B 4 --device cpu    # GPU가 있어도 CPU로
 | `can't open file 'check_week1.py'` | `cd week1` 로 과제 폴더까지 들어가야 함 |
 | `conda env create`가 `prefix already exists`로 실패 | 이미 만들어져 있음. `conda activate eece101`만 하면 됨 |
 | 환경 만들다 중간에 멈춤/실패 | `conda env remove -n eece101` 후 다시 `conda env create -f environment.yml` |
-| CIFAR-100 다운로드가 멈추거나 `File not found or corrupted` | `data` 폴더를 지우고 다시 실행하거나, 조교에게 `data` 폴더 받기 |
+| 데이터 다운로드가 멈춘 것 같음 | 진행률이 조금이라도 올라가면 정상 (서버가 느림). 끊겼으면 `python download_data.py` 다시 실행 → 이어받기 |
+| `파일이 깨져 있어서 지웠습니다` | `python download_data.py` 다시 실행, 또는 조교에게 `data` 폴더 받기 |
+| `CIFAR-100 ... not found` / `Dataset not found` | 4단계를 안 했음. `data` 폴더 넣기 또는 `python download_data.py` |
 | Miniconda/Anaconda를 쓰는데 "Terms of Service" 오류 | 오류 메시지의 `conda tos accept ...` 명령을 실행해 약관에 동의하거나, Miniforge로 설치 |
 | `CUDA GPU를 찾을 수 없습니다` | `--device cpu`를 붙이거나 빼기 (기본값 auto면 알아서 CPU 사용) |

@@ -29,9 +29,19 @@ TRANSFORM = transforms.Compose([
 ])
 
 
+def ensure_cifar100():
+    # data 폴더에 CIFAR-100이 없으면 저장소 최상위의 download_data.py 로 받는다 (이어받기 지원)
+    if not os.path.exists(os.path.join(DATA_ROOT, "cifar-100-python", "test")):
+        import sys
+        sys.path.insert(0, os.path.dirname(DATA_ROOT))
+        import download_data
+        download_data.main()
+
+
 def load_CIFAR100(root=DATA_ROOT):
-    train = datasets.CIFAR100(root=root, train=True, download=True, transform=TRANSFORM)
-    val = datasets.CIFAR100(root=root, train=False, download=True, transform=TRANSFORM)
+    ensure_cifar100()
+    train = datasets.CIFAR100(root=root, train=True, download=False, transform=TRANSFORM)
+    val = datasets.CIFAR100(root=root, train=False, download=False, transform=TRANSFORM)
     return train, val
 
 

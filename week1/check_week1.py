@@ -15,14 +15,17 @@ results = []
 
 
 def check(name, fn):
-    # fn()이 True면 PASS. 아직 안 채운 TODO면 "미구현"으로 표시
+    # fn()이 True면 PASS. 아직 안 채운 TODO면 [TODO]로 표시
     try:
         ok = bool(fn())
         results.append(ok)
         print(f"[{'PASS' if ok else 'FAIL'}] {name}")
     except NotImplementedError as e:
         results.append(False)
-        print(f"[TODO] {name}  <- {e}")
+        print(f"[TODO] {name}  <- {e}  (코드를 썼다면 raise 줄을 지웠는지 확인)")
+    except NameError as e:
+        results.append(False)
+        print(f"[ERR ] {name}  <- {e}  (주석에 적힌 변수 이름 new_levels / bits / idx 를 그대로 썼는지 확인)")
     except Exception as e:
         results.append(False)
         print(f"[ERR ] {name}  <- {type(e).__name__}: {e}")
@@ -110,3 +113,5 @@ else:
     print("[SKIP] GPU 검사 (CUDA GPU 없음)")
 
 print(f"\n{sum(results)}/{len(results)} 통과")
+if all(results):
+    print("모두 통과! 이제 README의 다음 단계(학습)로 넘어가세요.")
