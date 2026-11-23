@@ -14,6 +14,7 @@ import torch
 HERE = os.path.dirname(os.path.abspath(__file__))
 WEEK1 = os.path.normpath(os.path.join(HERE, "..", "week1"))
 RESULT_DIR = os.path.join(HERE, "results")
+IMAGE_DIR = os.path.join(HERE, "images")          # tx.py 가 기본으로 보내는 사진 폴더
 sys.path.insert(0, WEEK1)
 import utils                                              # noqa: E402
 from models.channel import index_to_bits, bits_to_index   # noqa: E402
@@ -28,7 +29,7 @@ def add_codec_args(parser):
                    help="1주차 양자화 방법")
     g.add_argument("--ckpt", type=str, default=None,
                    help="체크포인트 직접 지정 (기본: week1/checkpoints/{method}_B{B}.pth)")
-    g.add_argument("--index", type=int, default=0, help="CIFAR-100 테스트 이미지 번호")
+    g.add_argument("--index", type=int, default=None, help="CIFAR-100 테스트 이미지 번호 (기본 0)")
     g.add_argument("--image", type=str, default=None,
                    help="직접 고른 사진 파일 (가운데를 정사각형으로 잘라 32x32로 축소). 폴더를 주면 가장 최근 사진")
     g.add_argument("--gray", action="store_true", help="Gray 코드 비트 매핑")
@@ -51,9 +52,15 @@ def load_model(args):
     return model, cfg
 
 
-def newest_image(folder):
+def list_images(folder):
     exts = (".jpg", ".jpeg", ".png", ".bmp", ".webp", ".gif")
-    files = [os.path.join(folder, f) for f in os.listdir(folder) if f.lower().endswith(exts)]
+    if not os.path.isdir(folder):
+        return []
+    return [os.path.join(folder, f) for f in os.listdir(folder) if f.lower().endswith(exts)]
+
+
+def newest_image(folder):
+    files = list_images(folder)
     if not files:
         raise SystemExit(f"{folder} 폴더에 사진이 없습니다")
     return max(files, key=os.path.getmtime)
@@ -71,6 +78,8 @@ def load_image(args):
         img = img.crop(((w - s) // 2, (h - s) // 2, (w - s) // 2 + s, (h - s) // 2 + s))
         img = img.resize((32, 32), Image.LANCZOS)
         return utils.TRANSFORM(img).unsqueeze(0)
+    if args.index is None:
+        args.index = 0
     import torchvision.datasets as datasets
     utils.ensure_cifar100()                     # 없으면 download_data.py 로 받기 (이어받기 지원)
     val = datasets.CIFAR100(root=utils.DATA_ROOT, train=False, download=False, transform=utils.TRANSFORM)

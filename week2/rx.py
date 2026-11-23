@@ -11,6 +11,7 @@ import sys
 import subprocess
 import argparse
 import numpy as np
+import torch
 from scipy.io import wavfile
 from scipy.signal import resample_poly
 import matplotlib
@@ -45,23 +46,25 @@ def record(seconds, fs, device=None):
 
 
 def receive(sig, model, x_true, cfg, quiet=False):
-    """수신 신호 -> (결과 dict, 복원 이미지, 채널 없는 복원 이미지). quiet=False 면 문제 진단도 출력"""
-    true_bits, shape = codec.image_to_bits(model, x_true, cfg.gray, cfg.interleave)
+    """수신 신호 -> (결과 dict, 복원 이미지, 채널 없는 복원 이미지). quiet=False 면 문제 진단도 출력
+    x_true=None 이면 원본 없이 받기만 한다 (BER/PSNR 생략)"""
+    ref = x_true if x_true is not None else torch.zeros(1, 3, 32, 32)    # 비트 수/모양만 알면 됨
+    true_bits, shape = codec.image_to_bits(model, ref, cfg.gray, cfg.interleave)
     n_frames = int(np.ceil(len(true_bits) / cfg.frame_bits))
 
     frames = modem.decode_frames(sig, cfg)
     bits, valid = modem.assemble_bits(frames, len(true_bits), cfg.frame_bits)
 
     x_rx = codec.bits_to_image(model, bits, shape, valid, cfg.gray, cfg.interleave)
-    x_clean = codec.bits_to_image(model, true_bits, shape, None, cfg.gray, cfg.interleave)
-    n_rx = valid.sum()
+    x_clean = codec.bits_to_image(model, true_bits, shape, None, cfg.gray, cfg.interleave) if x_true is not None else None
+    n_rx = valid.sum() if x_true is not None else 0
     rep = dict(
         frames_total=n_frames,
         frames_rx=len({f['seq'] for f in frames if f['seq'] < n_frames}),
         crc_fail=sum(not f['crc_ok'] for f in frames),
         ber=float((bits[valid] != true_bits[valid]).mean()) if n_rx else float('nan'),
-        psnr_rx=codec.psnr(x_rx, x_true),
-        psnr_clean=codec.psnr(x_clean, x_true),
+        psnr_rx=codec.psnr(x_rx, x_true) if x_true is not None else float('nan'),
+        psnr_clean=codec.psnr(x_clean, x_true) if x_true is not None else float('nan'),
     )
     rep['frame_loss'] = 1 - rep['frames_rx'] / n_frames
     rep['chirps'], rep['best_corr'] = count_chirps(sig, cfg)
@@ -110,22 +113,40 @@ def diagnose(sig, frames, rep, cfg):
 def print_report(rep):
     print(f"프레임 시작(chirp) 찾음 {rep.get('chirps', '?')}번  ->  헤더까지 읽은 프레임 "
           f"{rep['frames_rx']}/{rep['frames_total']}  (손실률 {rep['frame_loss']:.1%}),  CRC 실패 {rep['crc_fail']}개")
+    if np.isnan(rep['psnr_clean']):
+        print("원본 이미지를 안 줘서 BER/PSNR 은 생략 (비교하려면 --image 또는 --index)")
+        return print_tips(rep)
     if np.isnan(rep['ber']):
         print("BER: 받은 비트가 없어서 계산할 수 없음")
     else:
         print(f"BER (수신된 비트 기준) {rep['ber']:.2e}")
     print(f"PSNR  채널 없음 {rep['psnr_clean']:.2f} dB  ->  수신 이미지 {rep['psnr_rx']:.2f} dB")
+    print_tips(rep)
+
+
+def print_tips(rep):
     for t in rep.get('tips', []):
         print("[진단]", t)
 
 
-def save_figure(x_true, x_clean, x_rx, rep, path):
-    # 받은 이미지만 저장 (원본/No channel 비교 없이)
-    fig, a = plt.subplots(figsize=(4, 4))
-    a.imshow(codec.to_img(x_rx)); a.axis("off")
+def save_figure(x_true, x_clean, x_rx, rep, path, show=False):
+    """원본이 있으면 [원본 | 채널 없음 | 수신] 비교, 없으면 받은 이미지만. show=True 면 그림을 바로 연다"""
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
-    fig.tight_layout(pad=0); fig.savefig(path, dpi=150); plt.close(fig)
+    if x_true is None:
+        fig, a = plt.subplots(figsize=(4, 4))
+        a.imshow(codec.to_img(x_rx)); a.axis("off")
+        fig.tight_layout(pad=0)
+    else:
+        fig, ax = plt.subplots(1, 3, figsize=(7, 2.8))
+        titles = ["Original", f"No channel\n{rep['psnr_clean']:.2f} dB",
+                  f"Received\n{rep['psnr_rx']:.2f} dB " + ("(no bits)" if np.isnan(rep['ber']) else f"(BER {rep['ber']:.1e})")]
+        for a, img, t in zip(ax, [x_true, x_clean, x_rx], titles):
+            a.imshow(codec.to_img(img)); a.set_title(t, fontsize=9); a.axis("off")
+        fig.tight_layout()
+    fig.savefig(path, dpi=150); plt.close(fig)
     print("그림 저장:", path)
+    if not show:
+        return
     if sys.platform == "darwin":
         subprocess.run(["open", path])
     elif sys.platform == "win32":
@@ -144,7 +165,8 @@ def main():
     args = parser.parse_args()
 
     model, _ = codec.load_model(args)
-    x_true = codec.load_image(args)
+    # 원본을 주면(--image / --index) BER/PSNR 까지, 안 주면 받은 이미지만
+    x_true = codec.load_image(args) if (args.image or args.index is not None) else None
 
     if args.wav:
         sig = read_wav(args.wav, args.fs)
@@ -157,7 +179,7 @@ def main():
 
     rep, x_rx, x_clean = receive(sig, model, x_true, args)
     print_report(rep)
-    save_figure(x_true, x_clean, x_rx, rep, args.fig)
+    save_figure(x_true, x_clean, x_rx, rep, args.fig, show=True)
 
 
 if __name__ == "__main__":

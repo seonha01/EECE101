@@ -3,7 +3,8 @@
 
 예)  python tx.py --out tx.wav            # wav로 저장만 (휴대폰으로 옮겨서 재생해도 된다)
      python tx.py --play                   # 스피커로 송신
-     python tx.py --image images --B 2 --play   # images 폴더의 최근 사진을 1/24 로 압축해서 송신
+     python tx.py --B 2 --play             # images 폴더의 최근 사진을 1/24 로 압축해서 송신
+     (images 폴더가 비어 있으면 CIFAR-100 테스트 0번 이미지)
 """
 import os
 import time
@@ -25,8 +26,7 @@ def make_tx_signal(model, x, cfg):
 
 def rx_options(args):
     # 받는 쪽이 같게 맞춰야 하는 옵션만 (기본값과 다른 것)
-    image = f"--image {os.path.basename(args.image)}" if args.image else f"--index {args.index}"
-    opts = [image, f"--ckpt ../week1/checkpoints/{args.method}_B{args.B}.pth"]
+    opts = [f"--ckpt ../week1/checkpoints/{args.method}_B{args.B}.pth"]
     for key, default in [("baud", 200), ("f0", 3000), ("f1", 5000), ("frame_bits", 256)]:
         if getattr(args, key) != default:
             opts.append(f"--{key} {getattr(args, key):g}")
@@ -50,6 +50,8 @@ def main():
     parser.add_argument("--wait", type=float, default=3, help="재생 전 카운트다운 (s)")
     args = parser.parse_args()
 
+    if args.image is None and args.index is None and codec.list_images(codec.IMAGE_DIR):
+        args.image = codec.IMAGE_DIR                     # 기본: images 폴더의 가장 최근 사진
     model, cfg = codec.load_model(args)
     x = codec.load_image(args)
     sig, bits, n_frames = make_tx_signal(model, x, args)
@@ -59,7 +61,7 @@ def main():
     print(f"이미지: {args.image or f'CIFAR-100 테스트 {args.index}번'}")
     print(f"압축: 원본 {raw:,} bit -> {len(bits):,} bit  (1/{raw / len(bits):g},  {cfg['method']} B={cfg['B']})")
     print(f"소리: 프레임 {n_frames}개 x {args.frame_bits} bit  |  길이 {dur:.1f} s")
-    print("받는 쪽 명령 (같은 사진 파일이 있으면 --image 로 주면 BER/PSNR 도 계산됨):")
+    print("받는 쪽 명령:")
     print("  python rx.py " + rx_options(args) + f" --record {int(np.ceil(dur)) + 8}")
 
     if args.out:
