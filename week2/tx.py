@@ -1,7 +1,8 @@
 """
 송신기 (노트북 A): 이미지 -> Encoder+양자화 -> 비트열 -> BFSK 오디오 -> 스피커 / wav
 
-예)  python tx.py --out tx.wav            # wav로 저장만 (휴대폰으로 옮겨서 재생해도 된다)
+예)  python tx.py                         # 아래 '여기만 고쳐서' 의 B, IMAGE 로 송신
+     python tx.py --out tx.wav            # wav로 저장만 (휴대폰으로 옮겨서 재생해도 된다)
      python tx.py --play                   # 스피커로 송신
      python tx.py --B 2 --play             # images 폴더에서 사진을 골라 1/24 로 압축해서 송신
      (images 폴더가 비어 있으면 CIFAR-100 테스트 0번 이미지)
@@ -16,6 +17,13 @@ from scipy.io import wavfile
 import modem
 import image_codec as codec
 import utils
+
+# ===================== 여기만 고쳐서 `python tx.py` 로 보내기 =====================
+B = 4            # 압축률: 2 (1/24, 약 9초) / 4 (1/12, 약 18초) / 8 (1/6, 약 35초). 받는 쪽도 같은 B!
+IMAGE = None     # images 폴더 안의 사진 이름 (예: "Lenna.png"). None 이면 목록에서 고르기
+PLAY = True      # True: 스피커로 바로 재생 (--out 만 주면 저장만)
+# 명령줄에 --B 8, --image cat.jpg 처럼 주면 위 값보다 그게 우선
+# ==================================================================================
 
 
 def make_tx_signal(model, x, cfg):
@@ -61,8 +69,12 @@ def main():
     parser.add_argument("--play", action="store_true", help="스피커로 재생")
     parser.add_argument("--device", default=None, help="sounddevice 출력 장치 번호/이름")
     parser.add_argument("--wait", type=float, default=3, help="재생 전 카운트다운 (s)")
+    parser.set_defaults(B=B)
     args = parser.parse_args()
+    args.play = args.play or (PLAY and not args.out)
 
+    if args.image is None and args.index is None and IMAGE:
+        args.image = os.path.join(codec.IMAGE_DIR, IMAGE)
     if args.image is None and args.index is None and codec.list_images(codec.IMAGE_DIR):
         args.image = choose_image(codec.IMAGE_DIR)       # 기본: images 폴더에서 고르기
     model, cfg = codec.load_model(args)
