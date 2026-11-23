@@ -33,6 +33,8 @@ def read_wav(path, fs):
 
 def record(seconds, fs, device=None):
     import sounddevice as sd
+    if isinstance(device, str) and device.isdigit():
+        device = int(device)  # "--device 1" 은 장치 번호로 해석
     print(f"{seconds}초 녹음 시작... 이제 송신기를 재생하세요")
     sig = sd.rec(int(seconds * fs), samplerate=fs, channels=1, dtype='float32', device=device)
     sd.wait()

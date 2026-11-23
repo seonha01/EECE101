@@ -98,7 +98,9 @@ def fsk_modulate(bits, cfg):
     #   쓸 만한 도구: numpy의 "누적합" 함수, np.sin, np.pi, cfg.fs
     #   확인: python explore_week2.py 1  (파형과 스펙트럼 그림)
     # ------------------------------------------------------------------------------
-    raise NotImplementedError("TODO 1 fsk_modulate")
+    freq = np.repeat(np.where(bits > 0, cfg.f1, cfg.f0), samples_per_symbol(cfg))
+    phase = 2 * np.pi * np.cumsum(freq) / cfg.fs
+    return np.sin(phase)
 
 
 # ======================= 2. 복조: 소리 -> 비트 (TODO 2) =======================
@@ -137,7 +139,16 @@ def fsk_demodulate(sig, start, n_bits, cfg, trim=0.1):
     #   쓸 만한 도구: np.cos, np.sin, np.sqrt, np.pi, np.sum(axis=...), .astype
     #   확인: python explore_week2.py 2  (잡음 속 비트 판정, 심볼 하나의 스펙트럼)
     # ------------------------------------------------------------------------------
-    raise NotImplementedError("TODO 2 fsk_demodulate")
+    sps = samples_per_symbol(cfg)
+    need = start + n_bits * sps
+    if need > len(sig):
+        sig = np.concatenate([sig, np.zeros(need - len(sig))])
+    sym = sig[start:need].reshape(n_bits, sps)
+    a, b = int(trim * sps), sps - int(trim * sps)
+    t = np.arange(a, b) / cfg.fs
+    e0 = np.abs(sym[:, a:b] @ np.exp(-2j * np.pi * cfg.f0 * t))
+    e1 = np.abs(sym[:, a:b] @ np.exp(-2j * np.pi * cfg.f1 * t))
+    return (e1 > e0).astype(np.uint8)
 
 
 # ======================= 3. 동기화: 프레임 시작 찾기 (TODO 3) =======================
@@ -172,7 +183,11 @@ def find_next_preamble(ncorr, pos, thr, n_chirp):
     #   쓸 만한 도구: 조건을 만족하는 인덱스 찾기 (np.flatnonzero / np.where), 최댓값 위치 (np.argmax)
     #   확인: python explore_week2.py 3  (상관 그래프)
     # ------------------------------------------------------------------------------
-    raise NotImplementedError("TODO 3 find_next_preamble")
+    above = np.flatnonzero(ncorr[pos:] > thr)
+    if len(above) == 0:
+        return None
+    first = pos + above[0]
+    return first + int(np.argmax(ncorr[first:first + n_chirp]))
 
 
 # ======================= 4~5. 프레임: 헤더 다수결, 프레임 조립 (TODO 4, 5) =======================
@@ -204,7 +219,8 @@ def majority_header(rep_bits):
     #   반환: 길이 32, 값이 0/1 인 np.uint8 배열
     #   쓸 만한 도구: 배열의 한 방향(axis)으로 더하기, 비교 연산(>=), .astype
     # ------------------------------------------------------------------------------
-    raise NotImplementedError("TODO 4 majority_header")
+    h = rep_bits.reshape(HEADER_REP, HEADER_BITS)
+    return (h.sum(axis=0) * 2 > HEADER_REP).astype(np.uint8)
 
 
 def build_frame_bits(seq, total, payload, B):
@@ -225,7 +241,9 @@ def build_frame_bits(seq, total, payload, B):
     #   주의: fsk_modulate 에서 본 np.repeat 는 "원소 하나하나"를 반복한다:  [1, 0] -> [1, 1, 1, 0, 0, 0]
     #         여기서 필요한 건 "배열 통째로" 반복:                             [1, 0] -> [1, 0, 1, 0, 1, 0]
     # ------------------------------------------------------------------------------
-    raise NotImplementedError("TODO 5 build_frame_bits")
+    header = pack_header(seq, total, len(payload), B)
+    crc = crc16(np.concatenate([header, payload]))
+    return np.concatenate([np.tile(header, HEADER_REP), payload, crc])
 
 
 def split_frames(bits, frame_bits):
