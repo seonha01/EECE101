@@ -7,7 +7,6 @@
 """
 import os
 import sys
-import hashlib
 import numpy as np
 import torch
 
@@ -76,17 +75,22 @@ def newest_image(folder):
 
 
 def image_id(path):
-    """사진 지문: 파일 내용으로 만든 32비트 숫자. 받는 쪽이 images 폴더에서 같은 사진을 찾을 때 쓴다"""
-    with open(path, "rb") as f:
-        return int.from_bytes(hashlib.sha1(f.read()).digest()[:4], "big")
+    """사진 지문 (32비트): 사진을 9x4 흑백으로 줄이고 옆 칸끼리 밝기를 비교 (dHash).
+    파일 내용이 아니라 사진 모양으로 만들기 때문에, 다시 압축하거나 jpg/png 로 바꿔도 거의 같은 값"""
+    from PIL import Image
+    g = np.asarray(Image.open(path).convert("L").resize((9, 4), Image.BILINEAR), dtype=np.float64)
+    bits = (g[:, 1:] > g[:, :-1]).flatten()                 # 4줄 x 8쌍 = 32비트
+    return int("".join("1" if b else "0" for b in bits), 2)
 
 
-def find_image(img_id, folder=IMAGE_DIR):
-    """지문이 같은 (비트 3개까지 틀려도 되는) 사진 파일. 없으면 None"""
+def find_image(img_id, folder=IMAGE_DIR, max_diff=5):
+    """지문이 가장 가까운 사진 파일 (32비트 중 max_diff 개까지 달라도 같은 사진으로 봄). 없으면 None"""
+    best, best_diff = None, max_diff + 1
     for f in sorted(list_images(folder)):
-        if bin(image_id(f) ^ img_id).count("1") <= 3:
-            return f
-    return None
+        diff = bin(image_id(f) ^ img_id).count("1")
+        if diff < best_diff:
+            best, best_diff = f, diff
+    return best
 
 
 def grid_for(w, h, tiles):
