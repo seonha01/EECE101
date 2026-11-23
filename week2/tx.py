@@ -3,10 +3,11 @@
 
 예)  python tx.py --out tx.wav            # wav로 저장만 (휴대폰으로 옮겨서 재생해도 된다)
      python tx.py --play                   # 스피커로 송신
-     python tx.py --B 2 --play             # images 폴더의 최근 사진을 1/24 로 압축해서 송신
+     python tx.py --B 2 --play             # images 폴더에서 사진을 골라 1/24 로 압축해서 송신
      (images 폴더가 비어 있으면 CIFAR-100 테스트 0번 이미지)
 """
 import os
+import sys
 import time
 import argparse
 import numpy as np
@@ -34,6 +35,18 @@ def rx_options(args):
     return " ".join(opts)
 
 
+def choose_image(folder):
+    """images 폴더의 사진 목록을 보여 주고 번호로 고르기 (한 장이면 바로 그 사진)"""
+    files = sorted(codec.list_images(folder), key=os.path.getmtime, reverse=True)
+    if len(files) == 1 or not sys.stdin.isatty():
+        return files[0]                                  # 고를 수 없으면 가장 최근 사진
+    print("보낼 사진 (images 폴더):")
+    for i, f in enumerate(files, 1):
+        print(f"  {i}. {os.path.basename(f)}")
+    pick = input(f"번호 (1~{len(files)}, Enter = 1): ").strip()
+    return files[int(pick) - 1] if pick.isdigit() and 1 <= int(pick) <= len(files) else files[0]
+
+
 def play(sig, fs, device=None):
     import sounddevice as sd
     sd.play(sig.astype(np.float32), fs, device=device)
@@ -51,7 +64,7 @@ def main():
     args = parser.parse_args()
 
     if args.image is None and args.index is None and codec.list_images(codec.IMAGE_DIR):
-        args.image = codec.IMAGE_DIR                     # 기본: images 폴더의 가장 최근 사진
+        args.image = choose_image(codec.IMAGE_DIR)       # 기본: images 폴더에서 고르기
     model, cfg = codec.load_model(args)
     x = codec.load_image(args)
     sig, bits, n_frames = make_tx_signal(model, x, args)
