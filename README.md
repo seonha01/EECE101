@@ -4,6 +4,10 @@
 이미지 -> Encoder -> latent z -> 양자화(B bit) -> 비트열 -> [채널] -> Decoder -> 복원 이미지
 ```
 
+> **1주차를 이미 했다면** (Miniforge와 `eece101` 환경이 있다면):
+> 1단계로 새 코드를 `C:\EECE101-week2`에 받고 → 1주차 폴더의 `data` 폴더를 `C:\EECE101-week2` 안으로 복사 → **5단계**로 가세요.
+> 2~4단계는 건너뜁니다 (새로 설치할 것 없음).
+
 **컴퓨터에 아무것도 설치되어 있지 않다고 가정하고** 처음부터 설명합니다.
 Windows 기준이고, Mac은 각 단계의 **[Mac]** 부분을 보세요.
 
@@ -12,8 +16,8 @@ Windows 기준이고, Mac은 각 단계의 **[Mac]** 부분을 보세요.
 | 1 | 코드 받기 (ZIP) | 1분 | 과제가 올라올 때마다 |
 | 2 | Miniforge(conda) 설치 | 5~10분 | 한 번만 |
 | 3 | 과제용 환경 만들기 | 10~30분 (다운로드) | 한 번만 |
-| 4 | 데이터 넣기 | 1분 (받은 폴더 복사) / **30분 이상** (직접 다운로드) | 한 번만 |
-| 5 | 과제 시작 | 과제 README 참고 (1주차: 4~6시간) | |
+| 4 | 데이터 넣기 | 1분 (받은 폴더 복사) / **30분 이상** (직접 다운로드) | 코드 폴더마다 |
+| 5 | 과제 시작 | `week2/README.md` 참고 (4~8시간) | |
 
 설치(1~4단계)는 **넉넉히 1시간** 잡으세요. 대부분은 다운로드를 기다리는 시간입니다.
 
@@ -27,15 +31,15 @@ Windows 기준이고, Mac은 각 단계의 **[Mac]** 부분을 보세요.
 
    (또는 GitHub 페이지 위쪽의 초록색 **`<> Code`** 버튼 → **Download ZIP**)
 2. 다운로드 폴더에서 ZIP 파일을 **마우스 오른쪽 클릭 → 압축 풀기(모두 추출)**.
-3. 생긴 `EECE101-main` 폴더를 **`C:\` 바로 아래로 옮기세요.** → `C:\EECE101-main`
+3. 생긴 `EECE101-main` 폴더의 이름을 **`EECE101-week2`로 바꾸고 `C:\` 바로 아래로 옮기세요.** → `C:\EECE101-week2`
+   - 1주차 폴더와 이름이 달라야 1주차에 작성한 코드가 덮어써지지 않습니다.
    - 경로에 한글이나 띄어쓰기가 있으면 가끔 오류가 나서, 짧고 영어로만 된 곳에 두는 게 안전합니다.
-   - 폴더를 열었을 때 `README.md`, `environment.yml`, `week1` 이 바로 보여야 합니다.
+   - 폴더를 열었을 때 `README.md`, `environment.yml`, `week1`, `week2` 가 바로 보여야 합니다.
      (`EECE101-main` 안에 `EECE101-main`이 또 있으면 안쪽 폴더를 옮기세요)
 
-**[Mac]** ZIP을 더블클릭하면 풀립니다. `EECE101-main` 폴더를 홈 폴더(집 모양 아이콘)로 옮기세요.
+**[Mac]** ZIP을 더블클릭하면 풀립니다. 폴더 이름을 `EECE101-week2`로 바꿔 홈 폴더(집 모양 아이콘)로 옮기세요.
 
-> 과제가 새로 올라오면 ZIP을 다시 받아서 **다른 이름의 폴더에** 푸세요 (내가 작성한 코드가 덮어써지지 않게).
-> git을 아는 사람은 `git clone https://github.com/seonha01/EECE101.git` 로 받아도 됩니다.
+> git을 아는 사람은 `git clone https://github.com/seonha01/EECE101.git EECE101-week2` 로 받아도 됩니다.
 
 ---
 
@@ -96,12 +100,12 @@ Windows 기준이고, Mac은 각 단계의 **[Mac]** 부분을 보세요.
 1. Miniforge Prompt에서 코드 폴더로 이동합니다.
 
    ```
-   cd /d C:\EECE101-main
+   cd /d C:\EECE101-week2
    ```
    - `cd`는 "폴더 이동" 명령입니다. 폴더 경로를 모르겠으면 탐색기에서 그 폴더를 열고
      위쪽 주소창을 클릭 → 경로 복사 → `cd /d ` 뒤에 붙여넣기 (오른쪽 클릭하면 붙여넣어짐).
    - `dir` 을 입력했을 때 `environment.yml`이 보이면 맞는 폴더입니다.
-   - **[Mac]** `cd ~/EECE101-main` , 파일 목록은 `ls`
+   - **[Mac]** `cd ~/EECE101-week2` , 파일 목록은 `ls`
 2. 환경을 만듭니다. **인터넷 속도에 따라 5~20분** 걸립니다. 글자가 계속 올라가면 정상이니 기다리세요.
 
    ```
@@ -132,13 +136,13 @@ Windows 기준이고, Mac은 각 단계의 **[Mac]** 부분을 보세요.
 
 ### 방법 A (권장): 조교에게 받은 `data` 폴더 넣기
 
-조교가 USB나 드라이브로 나눠 준 **`data` 폴더를 `C:\EECE101-main` 안에 그대로 복사**하세요.
+조교가 USB나 드라이브로 나눠 준 **`data` 폴더를 `C:\EECE101-week2` 안에 그대로 복사**하세요.
 아래처럼 되면 맞습니다.
 
 ```
-C:\EECE101-main\data\cifar-100-python\train
-C:\EECE101-main\data\cifar-100-python\test
-C:\EECE101-main\data\cifar-100-python\meta
+C:\EECE101-week2\data\cifar-100-python\train
+C:\EECE101-week2\data\cifar-100-python\test
+C:\EECE101-week2\data\cifar-100-python\meta
 ```
 
 ### 방법 B: 직접 다운로드
@@ -146,7 +150,7 @@ C:\EECE101-main\data\cifar-100-python\meta
 받은 폴더가 없으면 직접 받습니다. **서버가 느려서 30분 이상 걸릴 수 있습니다.**
 
 ```
-cd /d C:\EECE101-main
+cd /d C:\EECE101-week2
 python download_data.py
 ```
 
@@ -161,14 +165,18 @@ python download_data.py
 
 ```
 conda activate eece101
-cd /d C:\EECE101-main\week1
-python check_week1.py
+cd /d C:\EECE101-week2\week2
+python check_week2.py
 ```
 
-처음엔 전부 `[TODO]`가 나옵니다. 이제 **`week1` 폴더 안의 `README.md`** 를 열고 순서대로 따라가세요.
+처음엔 전부 `[TODO]`가 나옵니다. 이제 **`week2` 폴더 안의 `README.md`** 를 열고 순서대로 따라가세요.
+
+- `week1` 폴더에는 **1주차 정답 코드와 학습된 모델**이 들어 있습니다. 2주차는 이것으로 이미지를 비트로 바꿉니다
+  (1주차 정답이 궁금하면 여기서 보면 됩니다).
+- 진짜 소리 단계(단계 8)에는 **장치가 두 개** 필요합니다 (노트북 2대, 또는 노트북 + 휴대폰).
 
 - 코드 편집은 메모장도 되지만 **VS Code**(https://code.visualstudio.com/, 무료)를 추천합니다.
-  설치 후 **File → Open Folder** 로 `C:\EECE101-main` 을 열면 왼쪽에 파일 목록이 보입니다.
+  설치 후 **File → Open Folder** 로 `C:\EECE101-week2` 을 열면 왼쪽에 파일 목록이 보입니다.
   `.md` 파일은 오른쪽 위 미리보기 버튼(돋보기 달린 아이콘)을 누르면 보기 좋게 보입니다.
 - 명령 실행은 계속 **Miniforge Prompt**에서 하면 됩니다.
 
@@ -176,19 +184,10 @@ python check_week1.py
 
 ## CPU / GPU
 
-**CPU만 있어도 과제를 전부 할 수 있습니다.** (1주차 모델 1개 학습이 노트북 CPU로 약 4~10분)
+**2주차는 학습이 없어서 CPU면 충분합니다** (GPU 필요 없음). 이미지 1장을 비트로 바꾸고 되돌리는 데 1초도 안 걸립니다.
 
-NVIDIA GPU가 있으면 자동으로 GPU를 씁니다 (실행하면 처음에 `device: cuda` 또는 `device: cpu`가 출력됨).
-
-```
-python main.py --method uniform --B 4                 # 자동 선택
-python main.py --method uniform --B 4 --device cpu    # GPU가 있어도 CPU로
-```
-
-- GPU를 쓰려면 CUDA용 PyTorch가 필요합니다: `environment.yml`의 `whl/cpu`를
-  [pytorch.org](https://pytorch.org/get-started/locally/)에서 본인 CUDA에 맞는 주소(`whl/cu1xx`)로 바꾼 뒤 3단계를 진행.
-  확인: `python -c "import torch; print(torch.cuda.is_available())"` → `True`
-- GPU에서 학습한 모델도 CPU에서 그대로 불러올 수 있고, 그 반대도 됩니다.
+(1주차 코드로 다시 학습해 보고 싶다면: `week1` 폴더에서 `python main.py --method uniform --B 4`.
+NVIDIA GPU가 있으면 자동으로 GPU를 씁니다. CUDA용 PyTorch 설치는 [pytorch.org](https://pytorch.org/get-started/locally/) 참고)
 
 ---
 
@@ -198,12 +197,12 @@ python main.py --method uniform --B 4 --device cpu    # GPU가 있어도 CPU로
 |---|---|
 | `'conda'은(는) 내부 또는 외부 명령...이 아닙니다` | 일반 명령 프롬프트가 아니라 **Miniforge Prompt**에서 실행 |
 | `No module named torch` | `conda activate eece101`을 안 했음 (줄 맨 앞에 `(eece101)`이 있어야 함) |
-| `EnvironmentFileNotFound` / `environment.yml` 없음 | 폴더 위치가 다름. `cd /d C:\EECE101-main` 후 `dir`로 확인 |
-| `can't open file 'check_week1.py'` | `cd week1` 로 과제 폴더까지 들어가야 함 |
+| `EnvironmentFileNotFound` / `environment.yml` 없음 | 폴더 위치가 다름. `cd /d C:\EECE101-week2` 후 `dir`로 확인 |
+| `can't open file 'check_week2.py'` | `cd week2` 로 과제 폴더까지 들어가야 함 |
+| 마이크 / 스피커 관련 문제 | `week2/README.md` 맨 아래 "자주 나오는 문제" 참고 |
 | `conda env create`가 `prefix already exists`로 실패 | 이미 만들어져 있음. `conda activate eece101`만 하면 됨 |
 | 환경 만들다 중간에 멈춤/실패 | `conda env remove -n eece101` 후 다시 `conda env create -f environment.yml` |
 | 데이터 다운로드가 멈춘 것 같음 | 진행률이 조금이라도 올라가면 정상 (서버가 느림). 끊겼으면 `python download_data.py` 다시 실행 → 이어받기 |
 | `파일이 깨져 있어서 지웠습니다` | `python download_data.py` 다시 실행, 또는 조교에게 `data` 폴더 받기 |
 | `CIFAR-100 ... not found` / `Dataset not found` | 4단계를 안 했음. `data` 폴더 넣기 또는 `python download_data.py` |
 | Miniconda/Anaconda를 쓰는데 "Terms of Service" 오류 | 오류 메시지의 `conda tos accept ...` 명령을 실행해 약관에 동의하거나, Miniforge로 설치 |
-| `CUDA GPU를 찾을 수 없습니다` | `--device cpu`를 붙이거나 빼기 (기본값 auto면 알아서 CPU 사용) |

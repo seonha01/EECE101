@@ -58,27 +58,18 @@ class ScalarQuantizer(nn.Module):
     ##############################WCML PROJECT (START)######################################
     # 모든 양자화기를 "z -> 인덱스(송신 심볼) -> 복원값" 두 단계로 나눠 구현한다.
     # 인덱스 단계가 있어야 비트스트림으로 바꿔 채널에 보낼 수 있기 때문.
-    #
-    # ★ TODO 채우는 법: `raise NotImplementedError(...)` 줄을 **지우고** 그 자리에 코드를 쓴다.
-    #   (raise 줄이 남아 있으면 그 위에 코드를 써도 항상 에러가 나서 [TODO]로 채점됨)
 
     # ---------- 1) Uniform ----------
     def uniform_index(self, z, B):
         # z in [-1, 1] -> 0 ~ 2^B-1 칸 번호
-        # TODO 1-1: [-1, 1]을 L = 2^B 칸으로 똑같이 나눴을 때 z가 몇 번째 칸인지 구하기
-        #   힌트) (z + 1) / 2 는 [0, 1] 범위 -> 여기에 L을 곱하고 torch.floor
-        #         z = 1 이면 L이 나오므로 .clamp(0, L - 1) 로 잘라주고, 마지막에 .long()
-        #   예) B=2: z=-0.6 -> 0,  z=0.2 -> 2,  z=1.0 -> 3
-        #   ▶ 아래 raise 줄을 지우고, 계산한 칸 번호를 return
-        raise NotImplementedError("TODO 1-1 uniform_index")
+        L = 2 ** B
+        idx = torch.floor((z + 1) / 2 * L)
+        return idx.clamp(0, L - 1).long()
 
     def uniform_value(self, idx, B):
         # 칸 번호 -> 칸의 가운데 값
-        # TODO 1-2: 칸 폭 step = 2 / 2^B 일 때, k번째 칸의 가운데 값 = -1 + (k + 0.5) * step
-        #   힌트) idx는 정수 텐서이므로 idx.float() 로 바꿔서 계산
-        #   예) B=2: [0, 1, 2, 3] -> [-0.75, -0.25, 0.25, 0.75]
-        #   ▶ 아래 raise 줄을 지우고, 계산한 값을 return
-        raise NotImplementedError("TODO 1-2 uniform_value")
+        step = 2.0 / (2 ** B)
+        return -1 + (idx.float() + 0.5) * step
 
     def uniform_quantization(self, z, B):
         z_q = self.uniform_value(self.uniform_index(z, B), B)
@@ -87,16 +78,11 @@ class ScalarQuantizer(nn.Module):
     # ---------- 2) mu-law ----------
     def mu_compress(self, z):
         # 0 근처를 넓게 펴 주는 압축 함수 F(z) = sgn(z) ln(1+mu|z|) / ln(1+mu)
-        # TODO 2-1: 위 식을 한 줄로
-        #   힌트) torch.sign, torch.log1p(x) = ln(1+x), z.abs(), np.log1p(self.mu)
-        #   ▶ 아래 raise 줄을 지우고 return 한 줄로
-        raise NotImplementedError("TODO 2-1 mu_compress")
+        return torch.sign(z) * torch.log1p(self.mu * z.abs()) / np.log1p(self.mu)
 
     def mu_expand(self, y):
         # 압축의 역함수 F^-1(y) = sgn(y) ((1+mu)^|y| - 1) / mu
-        # TODO 2-2: 위 식을 한 줄로  (mu_expand(mu_compress(z)) == z 가 되어야 함)
-        #   ▶ 아래 raise 줄을 지우고 return 한 줄로
-        raise NotImplementedError("TODO 2-2 mu_expand")
+        return torch.sign(y) * ((1 + self.mu) ** y.abs() - 1) / self.mu
 
     def mu_law_quantization(self, z, B):
         # 압축 -> 균일 양자화 -> 신장
@@ -108,19 +94,10 @@ class ScalarQuantizer(nn.Module):
     @torch.no_grad()
     def lloyd_max_step(self, samples, levels):
         # Lloyd 알고리즘 1회: (a) 경계 = 레벨 중간점  (b) 레벨 = 각 구간 샘플의 평균
-        # (a) 각 샘플이 몇 번째 구간(레벨)에 속하는지 -> idx (0 ~ L-1)
         idx = torch.bucketize(samples, midpoints(levels))
-
-        # TODO 3: (b) 구간 k에 속한 샘플들의 평균을 새 레벨 k로
-        #   - 구간에 샘플이 하나도 없으면 원래 레벨을 그대로 둔다
-        #   힌트) sums = torch.zeros_like(levels).index_add_(0, idx, samples)            # 구간별 합
-        #         cnts = torch.zeros_like(levels).index_add_(0, idx, torch.ones_like(samples))  # 구간별 개수
-        #         new_levels = torch.where(cnts > 0, 합 / 개수, levels)   (0으로 나누지 않게 cnts.clamp(min=1))
-        #   (for k in range(L) 반복문으로 풀어도 된다. 다만 B=8이면 느림)
-        #   예) samples=[-1, -0.8, 0.5, 0.7], levels=[-0.5, 0.5] -> [-0.9, 0.6]
-        #   ▶ 아래 raise 줄을 지우고 그 자리에 코드를 쓰기.
-        #     결과는 반드시 `new_levels` 라는 이름의 변수에 담기 (맨 아래 return 줄이 new_levels 를 씀)
-        raise NotImplementedError("TODO 3 lloyd_max_step")
+        sums = torch.zeros_like(levels).index_add_(0, idx, samples)
+        cnts = torch.zeros_like(levels).index_add_(0, idx, torch.ones_like(samples))
+        new_levels = torch.where(cnts > 0, sums / cnts.clamp(min=1), levels)  # 빈 구간은 유지
         return torch.sort(new_levels).values
 
     @torch.no_grad()
@@ -163,12 +140,9 @@ class ScalarQuantizer(nn.Module):
         # learned 방법에서만: 레벨을 z 쪽으로(codebook), z를 레벨 쪽으로(commitment)
         if self.method != 'learned':
             return torch.tensor(0.0, device=z.device)
-        # TODO 4: loss = codebook + beta * commitment
-        #   codebook   = mean((z_q - sg[z])^2)   -> 레벨만 움직임 (z는 고정)
-        #   commitment = mean((sg[z_q] - z)^2)   -> 인코더만 움직임 (레벨은 고정)
-        #   sg[x] (stop-gradient) 는 PyTorch에서 x.detach()
-        #   ▶ 아래 raise 줄을 지우고 loss 를 return
-        raise NotImplementedError("TODO 4 level_loss")
+        codebook = torch.mean((z_q - z.detach()) ** 2)
+        commit = torch.mean((z_q.detach() - z) ** 2)
+        return codebook + self.beta * commit
 
     # ---------- 공통: 인덱스 <-> 값 ----------
     def quantize_index(self, z):
@@ -233,7 +207,6 @@ class ScalarQuantizer(nn.Module):
         #############################WCML PROJECT (END)#########################################
 
         # preserve gradients
-        # 질문) 이 줄은 무슨 뜻이고, 무슨 역할을 하며, 왜 필요할까?  (README의 "생각해 볼 것" 참고)
         z_q = z + (z_q - z).detach()
 
         # perplexity
