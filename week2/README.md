@@ -1,6 +1,6 @@
 # week2: 소리로 사진 보내기, 작동 원리와 옵션
 
-실습 방법(설치, 보내고 받기)은 [맨 위 README](../README.md) 에 있습니다. 여기는 **어떻게 동작하는지**와 **모든 옵션**입니다.
+실습 방법(설치, 보내고 받기)은 [맨 위 README](../README.md) 에 있습니다. 여기는 작동 원리, 예외 상황 처리, 옵션입니다.
 
 ## 전체 흐름
 
@@ -19,10 +19,10 @@
 |---|---|---|
 | 압축 | 1주차에 학습한 Autoencoder. 32x32 사진 하나 -> 숫자 512개 (8x8 위치 x 8채널) -> 숫자마다 B 비트 | `image_codec.py`, `week1/` |
 | BFSK 변조 | 비트 0 = 3 kHz 소리, 비트 1 = 5 kHz 소리. 비트 하나 = 10 ms (100 baud) | `modem.fsk_modulate` |
-| 동기화 | 묶음마다 앞에 1 -> 8 kHz 로 올라가는 "뿌우" 소리(chirp)를 붙이고, 받는 쪽은 녹음에서 이 소리를 찾아 시작 위치를 맞춤 | `modem.find_next_preamble` |
+| 동기화 | 묶음마다 앞에 1 -> 8 kHz 로 올라가는 소리(chirp)를 붙이고, 받는 쪽은 녹음에서 이 소리를 찾아 시작 위치를 맞춤 | `modem.find_next_preamble` |
 | 헤더 | 묶음 번호, 전체 묶음 수, 길이, B (32비트). 깨지면 묶음 전체를 못 쓰므로 3번 보내고 비트마다 다수결 | `modem.majority_header` |
 | 복조 | 비트 구간마다 3 kHz 와 5 kHz 중 어느 쪽 소리가 큰지 비교 | `modem.fsk_demodulate` |
-| CRC | 묶음이 온전히 왔는지 검사하는 16비트 값. **틀려도 버리지 않고** 사진 복원에 씀 (Autoencoder 는 비트가 조금 틀려도 괜찮음) | `modem.crc16` |
+| CRC | 묶음이 온전히 왔는지 검사하는 16비트 값. 틀려도 버리지 않고 사진 복원에 씀 (Autoencoder 는 비트가 조금 틀려도 견딤) | `modem.crc16` |
 | 사진 정보 | 맨 앞 40비트 x 3번: 사진 지문(파일 내용의 SHA-1 앞 32비트) + 조각 배치(세로, 가로 각 4비트). 받는 쪽이 사진 크기와 원본을 알아냄 | `image_codec.info_bits` |
 | 조각 | 모델이 32x32 만 다루므로 사진을 32x32 조각으로 나눠 각각 압축. 긴 쪽이 `--tiles` 개, 짧은 쪽은 비율대로 | `image_codec.to_patches` |
 
@@ -30,19 +30,19 @@
 
 | 파일 | 내용 |
 |---|---|
-| `tx.py` | 보내는 쪽. 맨 위 `B`, `TILES`, `IMAGE` 를 고쳐서 `python tx.py` 로 실행해도 됨 |
+| `tx.py` | 보내는 쪽. 맨 위 `B`, `TILES`, `IMAGE` 를 고쳐 `python tx.py` 로도 실행 가능 |
 | `rx.py` | 받는 쪽. 녹음 -> 복원 -> 결과 출력 / 그림 (`results/rx_result.png`), 녹음은 `results/rx_record.wav` |
-| `scripts_windows_tx.bat`, `scripts_windows_rx.bat` | Windows 실행 스크립트 (conda 환경을 알아서 켜고, 기본 `--baud 100 --gray`) |
+| `scripts_windows_tx.bat`, `scripts_windows_rx.bat` | Windows 실행 스크립트 (conda 환경 자동 활성화, 기본 `--baud 100 --gray`) |
 | `scripts_mac_tx.sh`, `scripts_mac_rx.sh` | Mac 실행 스크립트 (같은 기능) |
 | `modem.py` | 소리 <-> 비트 (BFSK, chirp, 헤더, CRC, 채널 시뮬레이션) |
 | `image_codec.py` | 사진 <-> 비트 (1주차 모델, 조각 나누기/붙이기, 인터리빙) |
 | `loopback.py` | 스피커 없이 컴퓨터 안에서 잡음/메아리/시계 오차를 흉내 내어 실험 |
-| `explore_week2.py`, `check_week2.py` | 모뎀 각 단계를 그림으로 보기 / 단계별 자동 검사 (공부용) |
+| `explore_week2.py`, `check_week2.py` | 모뎀 각 단계를 그림으로 보기 / 단계별 자동 검사 |
 | `images/` | 보낼 사진 |
 
-## 예외 상황은 이렇게 처리합니다
+## 예외 상황 처리
 
-**받는 쪽 설정이 보내는 쪽과 달라도 되게** (사람이 실수하기 쉬운 것)
+**설정 불일치**
 
 | 상황 | 처리 | 코드 |
 |---|---|---|
@@ -52,7 +52,7 @@
 | 정사각형이 아닌 사진 | 긴 쪽을 `--tiles` 조각, 짧은 쪽은 비율대로 (최대 15). 배치 비율에 맞게 가장자리를 조금 잘라 늘어나지 않게 함 | `image_codec.grid_for`, `load_image` |
 | 사진이 여러 장 | 한 번에 한 장. `tx.py` 가 번호로 고르게 함 (한 장이면 바로). 받는 쪽은 지문으로 어떤 사진인지 알아냄 | `tx.choose_image` |
 
-**소리가 깨질 때** (비트가 틀리거나 일부를 못 받음)
+**소리 오류** (비트가 틀리거나 일부를 못 받음)
 
 | 상황 | 처리 | 코드 |
 |---|---|---|
@@ -88,7 +88,7 @@
 ## 모든 옵션
 
 스크립트(`scripts_*`)는 첫 숫자가 B 이고 나머지 옵션은 그대로 `tx.py` / `rx.py` 에 넘깁니다.
-`python tx.py ...`, `python rx.py ...` 로 직접 실행할 때는 기본값이 `--baud 200` 이고 `--gray` 가 꺼져 있으니 양쪽을 맞추세요.
+`python tx.py ...`, `python rx.py ...` 로 직접 실행하면 기본값이 `--baud 200`, `--gray` 꺼짐이므로 양쪽을 같게 줍니다.
 
 **사진 / 압축** (B, 조각 배치, 보낸 사진은 받는 쪽이 소리에서 알아냄. 녹음 시간 때문에 B 와 tiles 는 양쪽 같게)
 
@@ -110,7 +110,7 @@
 | `--f0`, `--f1` | 3000, 5000 | 비트 0 / 1 의 소리 높이 (Hz) |
 | `--frame_bits` | 256 | 묶음 하나의 데이터 비트 수 |
 | `--amp` | 0.5 | 소리 크기 (0~1) |
-| `--sync_thr` | 0.25 | chirp 를 찾았다고 볼 닮음 정도 (0~1). 못 찾으면 낮춰 보기 |
+| `--sync_thr` | 0.25 | chirp 를 찾았다고 볼 닮음 정도 (0~1). chirp 를 못 찾으면 낮춤 |
 
 **실행**
 
@@ -136,7 +136,7 @@
 ## 시뮬레이션 (스피커 없이)
 
 컴퓨터 안에서 잡음, 메아리, 두 노트북의 시계 차이를 흉내 냅니다. CIFAR-100 테스트 사진을 쓰므로 데이터가 필요합니다
-(`python ../download_data.py`, 약 170MB. 직접 고른 사진이면 `--image Lenna.png` 를 붙여 데이터 없이도 됨).
+(`python ../download_data.py`, 약 170MB). `--image Lenna.png` 처럼 사진을 주면 데이터 없이 실행됩니다.
 
 ```
 python loopback.py --image Lenna.png                         # 잡음 크기(SNR) 10, 0, -5, -8, -10 dB
