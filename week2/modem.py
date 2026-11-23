@@ -139,16 +139,13 @@ def fsk_demodulate(sig, start, n_bits, cfg, trim=0.1):
     #   쓸 만한 도구: np.cos, np.sin, np.sqrt, np.pi, np.sum(axis=...), .astype
     #   확인: python explore_week2.py 2  (잡음 속 비트 판정, 심볼 하나의 스펙트럼)
     # ------------------------------------------------------------------------------
-    sps = samples_per_symbol(cfg)
-    need = start + n_bits * sps
-    if need > len(sig):
-        sig = np.concatenate([sig, np.zeros(need - len(sig))])
-    sym = sig[start:need].reshape(n_bits, sps)
-    a, b = int(trim * sps), sps - int(trim * sps)
-    t = np.arange(a, b) / cfg.fs
-    e0 = np.abs(sym[:, a:b] @ np.exp(-2j * np.pi * cfg.f0 * t))
-    e1 = np.abs(sym[:, a:b] @ np.exp(-2j * np.pi * cfg.f1 * t))
-    return (e1 > e0).astype(np.uint8)
+    # (행렬곱 @ 대신 곱하고 더하기: 맥 Accelerate 의 복소수 행렬곱 가짜 경고를 피함)
+    def strength(f):
+        C = np.sum(seg * np.cos(2 * np.pi * f * t), axis=1)
+        S = np.sum(seg * np.sin(2 * np.pi * f * t), axis=1)
+        return np.sqrt(C ** 2 + S ** 2)
+
+    return (strength(cfg.f1) > strength(cfg.f0)).astype(np.uint8)
 
 
 # ======================= 3. 동기화: 프레임 시작 찾기 (TODO 3) =======================
