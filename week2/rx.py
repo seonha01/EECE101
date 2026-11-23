@@ -48,7 +48,8 @@ def record(seconds, fs, device=None):
 def receive(sig, model, x_true, cfg, quiet=False):
     """수신 신호 -> (결과 dict, 복원 이미지, 채널 없는 복원 이미지). quiet=False 면 문제 진단도 출력
     x_true=None 이면 원본 없이 받기만 한다 (BER/PSNR 생략)"""
-    ref = x_true if x_true is not None else torch.zeros(1, 3, 32, 32)    # 비트 수/모양만 알면 됨
+    s = 32 * cfg.tiles
+    ref = x_true if x_true is not None else torch.zeros(1, 3, s, s)      # 비트 수/모양만 알면 됨
     true_bits, shape = codec.image_to_bits(model, ref, cfg.gray, cfg.interleave)
     n_frames = int(np.ceil(len(true_bits) / cfg.frame_bits))
 

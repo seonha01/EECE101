@@ -20,6 +20,7 @@ import utils
 
 # ===================== 여기만 고쳐서 `python tx.py` 로 보내기 =====================
 B = 4            # 압축률: 2 (1/24, 약 9초) / 4 (1/12, 약 18초) / 8 (1/6, 약 35초). 받는 쪽도 같은 B!
+TILES = 1        # 해상도: 1 -> 32x32,  2 -> 64x64 (시간 4배),  3 -> 96x96 (9배),  4 -> 128x128 (16배)
 IMAGE = None     # images 폴더 안의 사진 이름 (예: "Lenna.png"). None 이면 목록에서 고르기
 PLAY = True      # True: 스피커로 바로 재생 (--out 만 주면 저장만)
 # 명령줄에 --B 8, --image cat.jpg 처럼 주면 위 값보다 그게 우선
@@ -35,7 +36,8 @@ def make_tx_signal(model, x, cfg):
 
 def rx_options(args):
     # 받는 쪽이 같게 맞춰야 하는 옵션만 (기본값과 다른 것)
-    opts = [f"--B {args.B}"] + ([f"--method {args.method}"] if args.method != "uniform" else [])
+    opts = [f"--B {args.B}"] + ([f"--tiles {args.tiles}"] if args.tiles > 1 else [])
+    opts = opts + ([f"--method {args.method}"] if args.method != "uniform" else [])
     if args.image and os.path.dirname(os.path.abspath(args.image)) == codec.IMAGE_DIR:
         opts.append(f"--image {os.path.basename(args.image)}")   # images 폴더는 git 에 있으니 받는 쪽도 원본 비교 가능
     for key, default in [("baud", 200), ("f0", 3000), ("f1", 5000), ("frame_bits", 256)]:
@@ -71,7 +73,7 @@ def main():
     parser.add_argument("--play", action="store_true", help="스피커로 재생")
     parser.add_argument("--device", default=None, help="sounddevice 출력 장치 번호/이름")
     parser.add_argument("--wait", type=float, default=3, help="재생 전 카운트다운 (s)")
-    parser.set_defaults(B=B)
+    parser.set_defaults(B=B, tiles=TILES)
     args = parser.parse_args()
     args.play = args.play or (PLAY and not args.out)
 
@@ -82,6 +84,8 @@ def main():
     model, cfg = codec.load_model(args)
     x = codec.load_image(args)
     sig, bits, n_frames = make_tx_signal(model, x, args)
+    if n_frames > 255:                                   # 헤더의 프레임 번호가 8비트
+        sys.exit(f"프레임이 {n_frames}개라 너무 많습니다 (최대 255). --B 나 --tiles 를 줄이세요.")
 
     dur = len(sig) / args.fs
     raw = x.numel() * 8                                  # 원본: 32x32x3 화소 x 8비트
