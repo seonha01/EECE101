@@ -11,6 +11,3 @@ __pycache__/
 
 # 녹음/송신 파일
 *.wav
-
-# 송신용 사진
-week2/images/

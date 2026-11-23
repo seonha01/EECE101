@@ -70,6 +70,8 @@ def load_image(args):
     """(1,3,32,32) 텐서, 값 범위 [-0.5, 0.5]"""
     if args.image:
         from PIL import Image
+        if not os.path.exists(args.image) and os.path.exists(os.path.join(IMAGE_DIR, args.image)):
+            args.image = os.path.join(IMAGE_DIR, args.image)    # "--image Lenna.png" -> images/Lenna.png
         if os.path.isdir(args.image):
             args.image = newest_image(args.image)
         img = Image.open(args.image).convert("RGB")

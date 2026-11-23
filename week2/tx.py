@@ -35,7 +35,9 @@ def make_tx_signal(model, x, cfg):
 
 def rx_options(args):
     # 받는 쪽이 같게 맞춰야 하는 옵션만 (기본값과 다른 것)
-    opts = [f"--ckpt ../week1/checkpoints/{args.method}_B{args.B}.pth"]
+    opts = [f"--B {args.B}"] + ([f"--method {args.method}"] if args.method != "uniform" else [])
+    if args.image and os.path.dirname(os.path.abspath(args.image)) == codec.IMAGE_DIR:
+        opts.append(f"--image {os.path.basename(args.image)}")   # images 폴더는 git 에 있으니 받는 쪽도 원본 비교 가능
     for key, default in [("baud", 200), ("f0", 3000), ("f1", 5000), ("frame_bits", 256)]:
         if getattr(args, key) != default:
             opts.append(f"--{key} {getattr(args, key):g}")
