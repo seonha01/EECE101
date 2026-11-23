@@ -26,7 +26,7 @@ def make_tx_signal(model, x, cfg):
 def rx_options(args):
     # 받는 쪽이 같게 맞춰야 하는 옵션만 (기본값과 다른 것)
     image = f"--image {os.path.basename(args.image)}" if args.image else f"--index {args.index}"
-    opts = [image, f"--ckpt ..\\week1\\checkpoints\\{args.method}_B{args.B}.pth"]
+    opts = [image, f"--ckpt ../week1/checkpoints/{args.method}_B{args.B}.pth"]
     for key, default in [("baud", 200), ("f0", 3000), ("f1", 5000), ("frame_bits", 256)]:
         if getattr(args, key) != default:
             opts.append(f"--{key} {getattr(args, key):g}")
