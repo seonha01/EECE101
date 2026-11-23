@@ -7,6 +7,8 @@
 BER 계산용 정답 비트는 같은 모델/같은 이미지(--index)를 수신 측에서 다시 인코딩해 얻는다.
 """
 import os
+import sys
+import subprocess
 import argparse
 import numpy as np
 from scipy.io import wavfile
@@ -118,14 +120,16 @@ def print_report(rep):
 
 
 def save_figure(x_true, x_clean, x_rx, rep, path):
-    fig, ax = plt.subplots(1, 3, figsize=(7, 2.8))
-    titles = ["Original", f"No channel\n{rep['psnr_clean']:.2f} dB",
-              f"Received\n{rep['psnr_rx']:.2f} dB " + ("(no bits)" if np.isnan(rep['ber']) else f"(BER {rep['ber']:.1e})")]
-    for a, img, t in zip(ax, [x_true, x_clean, x_rx], titles):
-        a.imshow(codec.to_img(img)); a.set_title(t, fontsize=9); a.axis("off")
+    # 받은 이미지만 저장 (원본/No channel 비교 없이)
+    fig, a = plt.subplots(figsize=(4, 4))
+    a.imshow(codec.to_img(x_rx)); a.axis("off")
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
-    fig.tight_layout(); fig.savefig(path, dpi=150); plt.close(fig)
+    fig.tight_layout(pad=0); fig.savefig(path, dpi=150); plt.close(fig)
     print("그림 저장:", path)
+    if sys.platform == "darwin":
+        subprocess.run(["open", path])
+    elif sys.platform == "win32":
+        os.startfile(path)
 
 
 def main():
