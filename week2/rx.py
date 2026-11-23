@@ -1,10 +1,11 @@
 """
 수신기 (노트북 B): 마이크 / wav -> 프레임 검출 -> BFSK 복조 -> 비트열 -> Decoder -> 이미지
 
-예)  python rx.py --wav tx.wav                   # wav 복조
-     python rx.py --record 30 --save_wav rx.wav   # 30초 녹음 후 복조
+예)  python rx.py                      # 녹음 (시간은 옵션으로 계산) -> 복원 -> results/rx_result.png
+     python rx.py --wav tx.wav         # wav 파일 복원
 
-BER 계산용 정답 비트는 같은 모델/같은 이미지(--index)를 수신 측에서 다시 인코딩해 얻는다.
+B, 사진 크기(조각 배치), 보낸 사진은 소리에서 알아낸다. 보낸 사진이 images 폴더에 있으면
+그 사진을 다시 인코딩해서 정답 비트로 쓰고 BER / PSNR 을 계산한다.
 """
 import os
 import sys
@@ -93,24 +94,28 @@ def diagnose(sig, frames, rep, cfg):
     """결과가 이상할 때 원인 후보를 알려 준다"""
     tips = []
     rms = float(np.sqrt(np.mean(sig ** 2)))
-    n_chirp, best = rep['chirps'], rep['best_corr']
+    n_chirp, best, total = rep['chirps'], rep['best_corr'], rep['frames_total']
+    got = {f['seq'] for f in frames if f['seq'] < total}
+    frame_len = len(modem.frame_waveform(np.zeros(cfg.frame_bits + 112, np.uint8), cfg))
+    cut_end = bool(got) and max(got) < total - 1 and frames[-1]['peak'] + 2 * frame_len > len(sig)
+
     if rms < 0.003:
         tips.append(f"녹음 소리가 매우 작습니다 (rms {rms:.4f}). 송신 쪽 볼륨을 올리고 노트북을 가까이 두세요.")
     if n_chirp == 0:
         tips.append(f"chirp(프레임 시작 소리)를 하나도 못 찾았습니다 (최대 유사도 {best:.2f} < 임계값 {cfg.sync_thr}). "
                     "소리가 마이크에 안 들어왔거나 너무 작습니다. --device 로 마이크를 바꿔 보거나 --sync_thr 를 낮춰 보세요.")
-    elif rep['frames_rx'] < min(n_chirp, rep['frames_total']):
+    elif min(n_chirp, total) - rep['frames_rx'] > int(cut_end):      # 끝에서 잘린 1개는 아래에서 따로 안내
         tips.append(f"chirp 는 {n_chirp}번 찾았는데 프레임은 {rep['frames_rx']}개만 읽었습니다 = chirp 뒤의 소리(헤더)를 못 읽음. "
-                    "(1) tx 와 rx 의 --baud, --f0, --f1, --frame_bits 가 같은지 확인하세요. "
-                    "(2) 진짜 소리를 같은 노트북의 스피커 -> 마이크로 하고 있다면, 노트북 마이크의 '에코 제거' 기능이 "
-                    "자기 스피커 소리를 지우는 경우가 많습니다. 노트북 두 대로 하거나, tx.wav 를 휴대폰으로 재생해 보세요.")
-    if frames and rep['frames_rx'] < rep['frames_total']:
-        frame_len = len(modem.frame_waveform(np.zeros(cfg.frame_bits + 112, np.uint8), cfg))
-        if frames[-1]['peak'] + 2 * frame_len > len(sig):
-            tips.append("녹음이 송신 도중에 끝난 것 같습니다. --record 를 tx.py 가 알려 준 시간보다 길게 주세요.")
+                    "(1) 양쪽 --baud, --f0, --f1, --frame_bits 가 같은지 확인하세요. "
+                    "(2) 한 노트북의 스피커 -> 같은 노트북 마이크라면, 마이크의 '에코 제거'가 자기 소리를 지웁니다. 노트북 두 대로 하세요. "
+                    "(3) 방이 울리면 더 가깝게, 또는 --baud 를 낮추세요.")
+    if got and 0 not in got:
+        tips.append(f"앞부분 프레임 {min(got)}개를 놓쳤습니다 = 녹음을 늦게 시작함. 받는 쪽을 먼저 시작하고 '녹음 시작'을 본 뒤 보내세요.")
+    if cut_end:
+        tips.append("뒷부분을 놓쳤습니다 = 녹음이 송신 도중에 끝남. 받는 쪽에 보내는 쪽과 같은 B / --tiles 를 주거나 --record 를 늘리세요.")
     if rep['frames_rx'] > 0 and rep['crc_fail'] == 0 and rep['ber'] > 0.3:
-        tips.append("CRC 는 모두 통과했는데 BER 이 0.5 근처입니다 = 전송은 성공, 비교할 정답이 다름. "
-                    "tx 와 rx 의 --index, --interleave, --gray, --ckpt 가 같은지 확인하세요.")
+        tips.append("CRC 는 모두 통과했는데 BER 이 0.5 근처입니다 = 전송은 성공, 비교한 원본이 보낸 사진과 다름. "
+                    "--image / --index 를 빼서 자동으로 찾게 하거나, --interleave / --gray 가 양쪽 같은지 확인하세요.")
     return tips
 
 
@@ -118,7 +123,7 @@ def print_report(rep):
     print(f"프레임 시작(chirp) 찾음 {rep.get('chirps', '?')}번  ->  헤더까지 읽은 프레임 "
           f"{rep['frames_rx']}/{rep['frames_total']}  (손실률 {rep['frame_loss']:.1%}),  CRC 실패 {rep['crc_fail']}개")
     if np.isnan(rep['psnr_clean']):
-        print("원본 이미지를 안 줘서 BER/PSNR 은 생략 (비교하려면 --image 또는 --index)")
+        print("비교할 원본이 없어서 BER/PSNR 은 생략 (보낸 사진을 이 컴퓨터 images 폴더에도 넣으면 자동 비교)")
         return print_tips(rep)
     if np.isnan(rep['ber']):
         print("BER: 받은 비트가 없어서 계산할 수 없음")
@@ -165,30 +170,61 @@ def tx_duration(model, cfg):
     return len(sig) / cfg.fs
 
 
-def match_sender(sig, args):
-    """소리에서 보내는 쪽 설정을 읽어 맞춘다: 헤더의 B, 첫 프레임 맨 앞의 사진 정보(지문, 조각 배치).
-    args.B, args.grid, args.sent_id 를 정하고, B 가 바뀌었으면 True (모델을 다시 불러야 함)"""
-    args.grid, args.sent_id = None, None
-    frames = modem.decode_frames(sig, args)
-    if not frames:
-        args.grid = (args.tiles, args.tiles)
-        return False
-    B = int(np.bincount([f['B'] for f in frames]).argmax())            # 여러 프레임의 다수결
+def get_signal(args, model):
+    """--wav 파일을 읽거나, 마이크로 녹음 (녹음 시간은 옵션으로 계산, 녹음은 wav 로 저장)"""
+    if args.wav:
+        return read_wav(args.wav, args.fs)
+    if not args.record:                                    # 보내는 소리 길이 + 여유 12초
+        args.record = float(np.ceil(tx_duration(model, args)) + 12)
+    sig = record(args.record, args.fs, args.device)
+    args.save_wav = args.save_wav or os.path.join(codec.RESULT_DIR, "rx_record.wav")
+    os.makedirs(os.path.dirname(os.path.abspath(args.save_wav)), exist_ok=True)
+    wavfile.write(args.save_wav, args.fs, (sig * 32767).astype(np.int16))
+    print("녹음 저장:", args.save_wav, f" (다시 복조: python rx.py --wav {args.save_wav} + 같은 옵션)")
+    return sig
+
+
+def read_sender_settings(frames, frame_bits):
+    """받은 프레임들에서 보내는 쪽 설정 읽기 -> (B, 조각 배치, 사진 지문 또는 None)
+    - B, 전체 프레임 수: 모든 프레임 헤더의 다수결
+    - 조각 배치, 지문: 첫 프레임 맨 앞의 사진 정보. 프레임 수와 맞을 때만 믿고, 아니면 프레임 수로 정사각형 추정"""
+    B = int(np.bincount([f['B'] for f in frames]).argmax())
     total = int(np.bincount([f['total'] for f in frames]).argmax())
     first = [f for f in frames if f['seq'] == 0 and len(f['payload']) >= codec.INFO_LEN]
     if first:
         img_id, (gh, gw) = codec.parse_info(first[0]['payload'])
-        need = int(np.ceil((codec.INFO_LEN + 512 * B * gh * gw) / args.frame_bits))
-        if 1 <= gh <= 15 and 1 <= gw <= 15 and need == total:             # 프레임 수와 맞으면 믿는다
-            args.grid, args.sent_id = (gh, gw), img_id
-    if args.grid is None:                                                # 첫 프레임을 못 읽음: 프레임 수로 추정
-        t = max(1, int(round(((total * args.frame_bits - codec.INFO_LEN) / (512 * B)) ** 0.5)))
-        args.grid = (t, t)
-    changed = B in (2, 4, 8) and B != args.B
-    if changed:
+        need = int(np.ceil((codec.INFO_LEN + 512 * B * gh * gw) / frame_bits))
+        if 1 <= gh <= 15 and 1 <= gw <= 15 and need == total:
+            return B, (gh, gw), img_id
+    t = max(1, int(round(((total * frame_bits - codec.INFO_LEN) / (512 * B)) ** 0.5)))
+    return B, (t, t), None
+
+
+def match_sender(sig, args, model):
+    """보내는 쪽 설정(B, 조각 배치)에 맞춘다. args.grid, args.sent_id 를 정하고 (B 가 다르면 다시 부른) 모델을 돌려준다"""
+    frames = modem.decode_frames(sig, args)
+    if not frames:                                         # 아무것도 못 받음: 받는 쪽 설정 그대로
+        args.grid, args.sent_id = (args.tiles, args.tiles), None
+        return model
+    B, args.grid, args.sent_id = read_sender_settings(frames, args.frame_bits)
+    gh, gw = args.grid
+    print(f"[자동] 사진 크기 {32 * gw}x{32 * gh} (32x32 조각 가로 {gw} x 세로 {gh})")
+    if B in (2, 4, 8) and B != args.B:
         print(f"[자동] 보내는 쪽은 B={B} 입니다 (받는 쪽 설정 B={args.B}). 맞춰서 복원합니다.")
         args.B, args.ckpt = B, None
-    return changed
+        model, _ = codec.load_model(args)
+    return model
+
+
+def load_original(args):
+    """비교할 원본: --image / --index 로 주거나, 없으면 보낸 사진의 지문으로 images 폴더에서 찾는다. 없으면 None"""
+    if not args.image and args.index is None and args.sent_id is not None:
+        args.image = codec.find_image(args.sent_id)
+        print(f"[자동] 보낸 사진: {os.path.basename(args.image)} (images 폴더에서 찾음) -> 원본과 비교합니다"
+              if args.image else "[자동] 보낸 사진이 이 컴퓨터의 images 폴더에 없음 -> 받은 사진만 보여 줍니다")
+    if args.image or args.index is not None:
+        return codec.load_image(args)                      # args.grid (보내는 쪽 배치) 로 자름
+    return None
 
 
 def main():
@@ -205,30 +241,10 @@ def main():
     args = parser.parse_args()
 
     model, _ = codec.load_model(args)
-
-    if args.wav:
-        sig = read_wav(args.wav, args.fs)
-    else:
-        if not args.record:                                # 녹음 시간: 보내는 소리 길이 + 여유 12초
-            args.record = float(np.ceil(tx_duration(model, args)) + 12)
-        sig = record(args.record, args.fs, args.device)
-        args.save_wav = args.save_wav or os.path.join(codec.RESULT_DIR, "rx_record.wav")
-        os.makedirs(os.path.dirname(os.path.abspath(args.save_wav)), exist_ok=True)
-        wavfile.write(args.save_wav, args.fs, (sig * 32767).astype(np.int16))
-        print("녹음 저장:", args.save_wav, f" (다시 복조: python rx.py --wav {args.save_wav} + 같은 옵션)")
-
-    if match_sender(sig, args):                            # 보내는 쪽 B 가 다르면 모델을 다시 불러옴
-        model, _ = codec.load_model(args)
-    gh, gw = args.grid
-    print(f"[자동] 사진 크기 {32 * gw}x{32 * gh} (32x32 조각 가로 {gw} x 세로 {gh})")
-
-    # 원본 사진: --image / --index 로 주거나, 없으면 보낸 사진의 지문으로 images 폴더에서 찾는다
-    if not args.image and args.index is None and args.sent_id is not None:
-        args.image = codec.find_image(args.sent_id)
-        print(f"[자동] 보낸 사진: {os.path.basename(args.image)} (images 폴더에서 찾음) -> 원본과 비교합니다"
-              if args.image else "[자동] 보낸 사진이 이 컴퓨터의 images 폴더에 없음 -> 받은 사진만 보여 줍니다")
-    x_true = codec.load_image(args) if (args.image or args.index is not None) else None
-    rep, x_rx, x_clean = receive(sig, model, x_true, args)
+    sig = get_signal(args, model)                          # 1. 소리 받기
+    model = match_sender(sig, args, model)                 # 2. 보내는 쪽 설정에 맞추기
+    x_true = load_original(args)                           # 3. 비교할 원본 (없으면 None)
+    rep, x_rx, x_clean = receive(sig, model, x_true, args) # 4. 복원
     print_report(rep)
     save_figure(x_true, x_clean, x_rx, rep, args.fig, show=not args.no_show)
 

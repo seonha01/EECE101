@@ -291,6 +291,8 @@ def decode_frames(sig, cfg):
             pos = peak + len(chirp)
             continue
         body_start = data_start + n_hdr * sps
+        if body_start + (h['length'] + CRC_BITS) * sps > len(sig):   # 녹음이 프레임 중간에 끝남 -> 버림
+            break
         body = fsk_demodulate(sig, body_start, h['length'] + CRC_BITS, cfg)
         payload, crc = body[:h['length']], body[h['length']:]
         crc_ok = np.array_equal(crc16(np.concatenate([pack_header(**h), payload])), crc)
