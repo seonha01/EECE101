@@ -1,193 +1,174 @@
-# 연구참여: Autoencoder 기반 이미지 통신
+# 소리로 사진 보내기: Autoencoder 기반 이미지 통신
+
+노트북 A가 사진을 **압축해서 삐- 소리로** 내보내면, 노트북 B가 마이크로 듣고 **사진을 다시 그려 냅니다.**
 
 ```
-이미지 -> Encoder -> latent z -> 양자화(B bit) -> 비트열 -> [채널] -> Decoder -> 복원 이미지
+[노트북 A: 보내는 쪽]                                [노트북 B: 받는 쪽]
+사진 -> 압축(Encoder) -> 0101... -> 삐-삐- 소리  ~~~>  마이크 -> 0101... -> 복원(Decoder) -> 사진
 ```
 
-> **1주차를 이미 했다면** (Miniforge와 `eece101` 환경이 있다면):
-> 1단계로 새 코드를 `C:\EECE101-week2`에 받고 → 1주차 폴더의 `data` 폴더를 `C:\EECE101-week2` 안으로 복사 → **5단계**로 가세요.
-> 2~4단계는 건너뜁니다 (새로 설치할 것 없음).
+코드를 몰라도 됩니다. 아래 순서대로 **복사 → 붙여넣기 → Enter** 만 하면 됩니다.
 
-**컴퓨터에 아무것도 설치되어 있지 않다고 가정하고** 처음부터 설명합니다.
-Windows 기준이고, Mac은 각 단계의 **[Mac]** 부분을 보세요.
-
-| 단계 | 할 일 | 걸리는 시간 | 언제 |
+| 순서 | 할 일 | 시간 | 언제 |
 |---|---|---|---|
-| 1 | 코드 받기 (ZIP) | 1분 | 과제가 올라올 때마다 |
-| 2 | Miniforge(conda) 설치 | 5~10분 | 한 번만 |
-| 3 | 과제용 환경 만들기 | 10~30분 (다운로드) | 한 번만 |
-| 4 | 데이터 넣기 | 1분 (받은 폴더 복사) / **30분 이상** (직접 다운로드) | 코드 폴더마다 |
-| 5 | 과제 시작 | `week2/README.md` 참고 (4~8시간) | |
+| [1](#1-설치-노트북마다-한-번만) | 설치 (코드, conda, 환경) | 30분 정도 | 노트북마다 한 번만 |
+| [2](#2-보낼-사진-고르기-보내는-쪽) | 보낼 사진 넣기 | 1분 | 원할 때 |
+| [3](#3-보내고-받기) | 보내고 받기 | 1~5분 | 매번 |
+| [4](#4-옵션을-바꿔-가며-실험하기) | 옵션 바꿔 가며 실험 | 자유 | |
 
-설치(1~4단계)는 **넉넉히 1시간** 잡으세요. 대부분은 다운로드를 기다리는 시간입니다.
-
----
-
-## 1단계. 코드 받기
-
-1. 아래 링크를 누르면 `EECE101-main.zip` 파일이 다운로드됩니다.
-
-   **https://github.com/seonha01/EECE101/archive/refs/heads/main.zip**
-
-   (또는 GitHub 페이지 위쪽의 초록색 **`<> Code`** 버튼 → **Download ZIP**)
-2. 다운로드 폴더에서 ZIP 파일을 **마우스 오른쪽 클릭 → 압축 풀기(모두 추출)**.
-3. 생긴 `EECE101-main` 폴더의 이름을 **`EECE101-week2`로 바꾸고 `C:\` 바로 아래로 옮기세요.** → `C:\EECE101-week2`
-   - 1주차 폴더와 이름이 달라야 1주차에 작성한 코드가 덮어써지지 않습니다.
-   - 경로에 한글이나 띄어쓰기가 있으면 가끔 오류가 나서, 짧고 영어로만 된 곳에 두는 게 안전합니다.
-   - 폴더를 열었을 때 `README.md`, `environment.yml`, `week1`, `week2` 가 바로 보여야 합니다.
-     (`EECE101-main` 안에 `EECE101-main`이 또 있으면 안쪽 폴더를 옮기세요)
-
-**[Mac]** ZIP을 더블클릭하면 풀립니다. 폴더 이름을 `EECE101-week2`로 바꿔 홈 폴더(집 모양 아이콘)로 옮기세요.
-
-> git을 아는 사람은 `git clone https://github.com/seonha01/EECE101.git EECE101-week2` 로 받아도 됩니다.
+**준비물**: 노트북 **2대** (Windows / Mac 아무 조합이나), 조용한 방.
+노트북 한 대로 혼자 보내고 받으면 안 됩니다. 노트북 마이크의 "에코 제거" 기능이 자기 스피커 소리를 지워 버립니다.
 
 ---
 
-## 2단계. Miniforge 설치 (conda)
+## 1. 설치 (노트북마다 한 번만)
 
-**conda**는 파이썬과 라이브러리(PyTorch 등)를 과제별로 따로 설치해 주는 프로그램이고,
-**Miniforge**는 conda를 설치하는 가장 가벼운 방법입니다. 파이썬이 없어도 같이 설치됩니다.
+두 노트북 **모두** 아래를 합니다.
 
-### Windows
+### 1-1. 코드 받기
 
-1. 아래 링크를 누르면 설치 파일(`Miniforge3-Windows-x86_64.exe`, 약 80MB)이 다운로드됩니다.
+1. **https://github.com/seonha01/EECE101/archive/refs/heads/main.zip** 을 눌러 ZIP 을 받습니다.
+2. 압축을 풀고, 생긴 `EECE101-main` 폴더 이름을 `EECE101` 로 바꿔서 옮깁니다.
+   - **Windows**: `C:\EECE101` (C 드라이브 바로 아래. 경로에 한글이나 띄어쓰기가 없게)
+   - **Mac**: 홈 폴더 (`~/EECE101`, Finder 에서 집 모양 아이콘)
+3. 폴더를 열었을 때 `README.md`, `environment.yml`, `week1`, `week2` 가 바로 보이면 맞습니다.
 
-   **https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Windows-x86_64.exe**
+> git 을 쓸 줄 알면: `git clone https://github.com/seonha01/EECE101.git` (나중에 `git pull` 로 새 버전 받기)
 
-   (링크가 안 되면 https://github.com/conda-forge/miniforge 페이지의 *Download* 표에서 `Windows x86_64` 줄의 파일)
-2. 다운로드한 파일을 더블클릭해서 실행합니다.
-   - "Windows의 PC 보호" 파란 창이 뜨면 **추가 정보 → 실행**
-3. 설치 화면은 이렇게 누르면 됩니다.
+### 1-2. Miniforge(conda) 설치
 
-   | 화면 | 누를 것 |
-   |---|---|
-   | Welcome | **Next** |
-   | License Agreement | **I Agree** |
-   | Select Installation Type | **Just Me (recommended)** 선택 → **Next** |
-   | Choose Install Location | 그대로 두고 **Next** (경로에 한글이 있다는 경고가 나오면 `C:\miniforge3`로 바꾸기) |
-   | Advanced Installation Options | 체크 상태 **그대로** 두고 **Install** |
-   | Completed | **Next** → **Finish** |
+conda 는 파이썬과 필요한 라이브러리를 설치해 주는 프로그램입니다. 이미 conda(Miniforge / Miniconda / Anaconda)가 있으면 건너뛰세요.
 
-4. **확인**: 키보드 `Windows` 키 → `miniforge` 입력 → **Miniforge Prompt** 클릭.
-   검은 창이 열리고 줄 맨 앞에 `(base)`가 보이면 성공입니다.
+**Windows**
+1. **https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Windows-x86_64.exe** 를 받아 실행합니다.
+   ("Windows의 PC 보호" 창이 뜨면 **추가 정보 → 실행**)
+2. 설치 화면은 **Next → I Agree → Just Me → Next → Install → Finish** (나머지는 그대로).
+3. `Windows` 키 → `miniforge` 입력 → **Miniforge Prompt** 를 엽니다. 줄 앞에 `(base)` 가 보이면 성공.
 
+**Mac**
+1. **터미널**을 엽니다 (`Cmd + Space` → `터미널` → Enter).
+2. 아래 두 줄을 한 줄씩 붙여넣고 Enter. 약관은 스페이스바로 넘기고 `yes`, 경로는 Enter, 마지막 질문도 `yes`.
    ```
-   (base) C:\Users\내이름>
-   ```
-   여기에 `conda --version` 을 입력하고 Enter → `conda 26.x.x` 같은 버전 숫자가 나오면 OK.
-
-> **앞으로 모든 명령은 이 "Miniforge Prompt" 창에 입력합니다.**
-> 일반 "명령 프롬프트"나 "PowerShell"에서는 `conda`를 못 찾을 수 있어요.
-
-### [Mac]
-
-1. **터미널**을 엽니다 (`Cmd + Space` → `터미널` 또는 `Terminal` 입력 → Enter).
-2. 아래 두 줄을 한 줄씩 복사해서 붙여넣고 Enter. (중간에 약관이 나오면 스페이스바로 넘기고 `yes`, 경로는 Enter,
-   마지막 "initialize" 질문에도 `yes`)
-
-   ```bash
    curl -L -O "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-$(uname)-$(uname -m).sh"
    bash Miniforge3-$(uname)-$(uname -m).sh
    ```
-3. 터미널을 **완전히 종료했다가 다시 열면** 줄 앞에 `(base)`가 보입니다. `conda --version`으로 확인.
+3. 터미널을 **완전히 껐다가 다시 열면** 줄 앞에 `(base)` 가 보입니다.
+
+### 1-3. 환경 만들기 (5~20분, 다운로드)
+
+Windows 는 **Miniforge Prompt**, Mac 은 **터미널**에서:
+
+| Windows | Mac |
+|---|---|
+| `cd /d C:\EECE101` | `cd ~/EECE101` |
+| `conda env create -f environment.yml` | `conda env create -f environment.yml` |
+
+글자가 계속 올라가면 정상입니다. 마지막에 `conda activate eece101` 하라는 안내가 나오면 끝.
+
+### 1-4. 마이크 허락하기
+
+- **Windows**: 설정 → 개인 정보 및 보안 → 마이크 → **"데스크톱 앱이 마이크에 액세스하도록 허용"** 켜기
+- **Mac**: 처음 녹음할 때 "터미널이 마이크에 접근하려고 합니다" 창이 뜨면 **허용**.
+  안 뜨거나 거부했으면 시스템 설정 → 개인정보 보호 및 보안 → 마이크 → **터미널** 켜기
 
 ---
 
-## 3단계. 과제용 환경 만들기
+## 2. 보낼 사진 고르기 (보내는 쪽)
 
-과제에 필요한 파이썬 3.10과 PyTorch, numpy 등을 `eece101`이라는 이름의 환경에 설치합니다.
+`week2/images` 폴더에 사진을 넣으면 됩니다. 기본으로 `Lenna.png` 가 들어 있습니다.
 
-1. Miniforge Prompt에서 코드 폴더로 이동합니다.
+- **한 번에 한 장**을 보냅니다. 사진이 여러 장이면 보낼 때 번호로 고르라고 물어봅니다. 여러 장은 차례로 한 장씩 보내면 됩니다.
+- **정사각형이 아니어도 됩니다.** 비율에 맞춰 조각을 나눕니다 (예: 가로로 긴 사진을 `--tiles 3` 으로 보내면 가로 3 x 세로 2 조각).
+  비율을 맞추느라 가장자리가 조금 잘릴 수 있습니다.
+- **큰 대상 하나가 가까이** 찍힌 사진(얼굴, 동물, 과일)이 잘 나옵니다. 글씨나 잔무늬는 뭉개집니다.
 
-   ```
-   cd /d C:\EECE101-week2
-   ```
-   - `cd`는 "폴더 이동" 명령입니다. 폴더 경로를 모르겠으면 탐색기에서 그 폴더를 열고
-     위쪽 주소창을 클릭 → 경로 복사 → `cd /d ` 뒤에 붙여넣기 (오른쪽 클릭하면 붙여넣어짐).
-   - `dir` 을 입력했을 때 `environment.yml`이 보이면 맞는 폴더입니다.
-   - **[Mac]** `cd ~/EECE101-week2` , 파일 목록은 `ls`
-2. 환경을 만듭니다. **인터넷 속도에 따라 5~20분** 걸립니다. 글자가 계속 올라가면 정상이니 기다리세요.
-
-   ```
-   conda env create -f environment.yml
-   ```
-   마지막에 `conda activate eece101` 하라는 안내가 나오면 성공입니다.
-3. 환경을 켭니다.
-
-   ```
-   conda activate eece101
-   ```
-   줄 맨 앞이 `(base)`에서 **`(eece101)`** 로 바뀌면 성공입니다.
-4. **확인**:
-
-   ```
-   python -c "import torch; print('PyTorch', torch.__version__)"
-   ```
-   `PyTorch 2.x.x` 가 나오면 준비 끝!
-
-> **Miniforge Prompt를 새로 열 때마다** `conda activate eece101` 을 먼저 입력해야 합니다.
-> (줄 맨 앞에 `(eece101)`이 있는지 항상 확인)
+**받는 쪽은 무슨 사진이 올지 몰라도 됩니다.** 보내는 쪽이 사진의 "지문"(파일 내용으로 만든 숫자)과 조각 배치를 소리 맨 앞에 같이 보냅니다.
+받는 쪽은 자기 `images` 폴더에서 지문이 같은 사진을 찾으면 **원본과 비교한 점수(PSNR)까지** 보여 주고, 없으면 받은 사진만 보여 줍니다.
+그래서 원본 비교까지 하고 싶으면 보낼 사진을 **양쪽 `images` 폴더에 똑같이** 넣어 두세요 (파일을 그대로 복사. 이름은 달라도 됨).
 
 ---
 
-## 4단계. 데이터 넣기 (CIFAR-100 이미지)
+## 3. 보내고 받기
 
-과제에 쓰는 이미지 데이터(약 170MB)입니다.
+**받는 쪽을 먼저** 실행하고, `녹음 시작` 이 보이면 보내는 쪽을 실행합니다.
 
-### 방법 A (권장): 조교에게 받은 `data` 폴더 넣기
+### 창 열고 폴더로 이동 (두 노트북 모두)
 
-조교가 USB나 드라이브로 나눠 준 **`data` 폴더를 `C:\EECE101-week2` 안에 그대로 복사**하세요.
-아래처럼 되면 맞습니다.
+| | Windows (Miniforge Prompt) | Mac (터미널) |
+|---|---|---|
+| 폴더 이동 | `cd /d C:\EECE101\week2` | `cd ~/EECE101/week2` |
+
+(Windows 는 탐색기에서 `.bat` 파일을 **더블클릭**해도 됩니다.)
+
+### 실행
+
+| | Windows | Mac |
+|---|---|---|
+| ① 받는 쪽 (먼저) | `scripts_windows_rx.bat` | `bash scripts_mac_rx.sh` |
+| ② 보내는 쪽 | `scripts_windows_tx.bat` | `bash scripts_mac_tx.sh` |
+
+- 보내는 쪽은 3, 2, 1 을 센 뒤 소리를 냅니다 (기본 설정으로 약 30초).
+- 받는 쪽은 소리 길이에 맞춰 녹음하고, 끝나면 **받은 사진을 자동으로 열어** 줍니다 (`week2/results/rx_result.png`).
+- PowerShell 창이라면 Windows 명령 앞에 `.\` 를 붙이세요: `.\scripts_windows_rx.bat`
+
+받는 쪽 `images` 폴더에 보낸 사진이 있으면 자동으로 **[원본 | 압축만 했을 때 | 받은 것]** 세 장을 나란히 보여 주고 점수도 계산합니다.
+
+### 결과 읽는 법
 
 ```
-C:\EECE101-week2\data\cifar-100-python\train
-C:\EECE101-week2\data\cifar-100-python\test
-C:\EECE101-week2\data\cifar-100-python\meta
+프레임 시작(chirp) 찾음 8번  ->  헤더까지 읽은 프레임 8/8  (손실률 0.0%),  CRC 실패 0개
+BER (수신된 비트 기준) 0.00e+00
+PSNR  채널 없음 24.44 dB  ->  수신 이미지 24.44 dB
 ```
 
-### 방법 B: 직접 다운로드
+| 항목 | 뜻 | 좋은 값 |
+|---|---|---|
+| 프레임 8/8 | 사진을 작은 묶음(프레임) 8개로 나눠 보냈는데 몇 개를 받았나. 못 받은 자리는 회색 | 전부 |
+| CRC 실패 | 받긴 했지만 안에 틀린 비트가 있는 묶음 수 | 0 |
+| BER | 틀린 비트 비율 (`1e-02` = 100개 중 1개) | 0 또는 아주 작게 |
+| PSNR | 원본과 얼마나 비슷한가 (dB, 클수록 좋음). "채널 없음"은 압축만 했을 때 = 최고점 | 두 숫자가 같으면 완벽 |
 
-받은 폴더가 없으면 직접 받습니다. **서버가 느려서 30분 이상 걸릴 수 있습니다.**
-
-```
-cd /d C:\EECE101-week2
-python download_data.py
-```
-
-- 진행률과 남은 시간이 표시됩니다. 숫자가 천천히라도 올라가면 정상이니 **창을 닫지 말고 기다리세요.**
-- 중간에 끊기거나 실수로 창을 닫아도 괜찮습니다. **같은 명령을 다시 실행하면 받던 곳부터 이어서** 받습니다.
-- 마지막에 `완료:`가 나오면 끝입니다.
-- 3단계(환경 만들기)가 끝나자마자 이걸 먼저 시작해 두고, 기다리는 동안 과제 README를 읽으면 시간이 절약됩니다.
+`[자동]`, `[진단]` 으로 시작하는 줄은 프로그램이 알려 주는 안내입니다. 읽고 따라 하면 됩니다.
 
 ---
 
-## 5단계. 과제 시작
+## 4. 옵션을 바꿔 가며 실험하기
+
+명령 뒤에 숫자와 옵션을 붙입니다. **첫 숫자는 압축률 B** 입니다.
 
 ```
-conda activate eece101
-cd /d C:\EECE101-week2\week2
-python check_week2.py
+scripts_windows_tx.bat 8 --tiles 2          (Windows)
+bash scripts_mac_tx.sh 8 --tiles 2          (Mac)
 ```
 
-처음엔 전부 `[TODO]`가 나옵니다. 이제 **`week2` 폴더 안의 `README.md`** 를 열고 순서대로 따라가세요.
+받는 쪽은 B, 조각 배치, 보낸 사진을 소리에서 **자동으로 알아냅니다.** 다만 녹음 시간이 B 와 tiles 로 정해지므로 **양쪽에 같은 숫자와 `--tiles`** 를 주세요.
 
-- `week1` 폴더에는 **1주차 정답 코드와 학습된 모델**이 들어 있습니다. 2주차는 이것으로 이미지를 비트로 바꿉니다
-  (1주차 정답이 궁금하면 여기서 보면 됩니다).
-- 진짜 소리 단계(단계 8)에는 **장치가 두 개** 필요합니다 (노트북 2대, 또는 노트북 + 휴대폰).
+| 옵션 | 뜻 | 값 |
+|---|---|---|
+| 첫 숫자 (B) | 압축률. 숫자 하나를 몇 비트로 보낼지 | `2` (1/24, 가장 흐림) / `4` (1/12, 기본) / `8` (1/6, 가장 선명) |
+| `--tiles N` | 해상도. 사진의 긴 쪽을 32x32 조각 N 개로 나눠 보냄 | `1` (32x32, 기본) ~ `4` (128x128) |
+| `--image 이름` | 보낼 사진을 번호로 고르지 않고 바로 지정 (images 폴더 안) | `Lenna.png` |
+| `--baud 200` | 2배 빠르게 (방이 울리면 오류가 늘어남) | 기본 `100` |
+| `--interleave` | 묶음을 잃어도 손상이 한 곳에 몰리지 않고 흩어짐 (양쪽 같게) | |
 
-- 코드 편집은 메모장도 되지만 **VS Code**(https://code.visualstudio.com/, 무료)를 추천합니다.
-  설치 후 **File → Open Folder** 로 `C:\EECE101-week2` 을 열면 왼쪽에 파일 목록이 보입니다.
-  `.md` 파일은 오른쪽 위 미리보기 버튼(돋보기 달린 아이콘)을 누르면 보기 좋게 보입니다.
-- 명령 실행은 계속 **Miniforge Prompt**에서 하면 됩니다.
+### 보내는 시간 (기본 100 baud, 정사각형 사진)
 
----
+| | B = 2 | B = 4 | B = 8 |
+|---|---|---|---|
+| tiles 1 (32x32) | 17초 | 32초 | 1분 |
+| tiles 2 (64x64) | 1분 | 2분 | 4분 |
+| tiles 3 (96x96) | 2분 20초 | 4분 40초 | 9분 |
+| tiles 4 (128x128) | 4분 | 8분 | (너무 많아서 안 됨) |
 
-## CPU / GPU
+### 해 볼 만한 실험
 
-**2주차는 학습이 없어서 CPU면 충분합니다** (GPU 필요 없음). 이미지 1장을 비트로 바꾸고 되돌리는 데 1초도 안 걸립니다.
+1. **압축률**: 같은 사진을 B = 2, 4, 8 로 보내 보기. 얼마나 흐려지나? 시간은?
+2. **해상도**: `--tiles 1` 과 `--tiles 2` 비교. 조각 경계가 보이나?
+3. **속도와 오류**: `--baud 200` (양쪽) 으로 보내 보기. CRC 실패와 BER 이 어떻게 변하나? 왜 그럴까?
+4. **거리와 소리 크기**: 노트북을 멀리, 볼륨을 작게 하면 어디서부터 깨지나? 그때 사진은 어떻게 망가지나?
+5. **인터리빙**: 소리 중간에 손으로 마이크를 잠깐 막아 보기. `--interleave` 를 켰을 때와 비교.
 
-(1주차 코드로 다시 학습해 보고 싶다면: `week1` 폴더에서 `python main.py --method uniform --B 4`.
-NVIDIA GPU가 있으면 자동으로 GPU를 씁니다. CUDA용 PyTorch 설치는 [pytorch.org](https://pytorch.org/get-started/locally/) 참고)
+작동 원리, 모든 옵션, 시뮬레이션(스피커 없이 컴퓨터 안에서 실험)은 [`week2/README.md`](week2/README.md) 에 있습니다.
 
 ---
 
@@ -195,14 +176,15 @@ NVIDIA GPU가 있으면 자동으로 GPU를 씁니다. CUDA용 PyTorch 설치는
 
 | 증상 | 해결 |
 |---|---|
-| `'conda'은(는) 내부 또는 외부 명령...이 아닙니다` | 일반 명령 프롬프트가 아니라 **Miniforge Prompt**에서 실행 |
-| `No module named torch` | `conda activate eece101`을 안 했음 (줄 맨 앞에 `(eece101)`이 있어야 함) |
-| `EnvironmentFileNotFound` / `environment.yml` 없음 | 폴더 위치가 다름. `cd /d C:\EECE101-week2` 후 `dir`로 확인 |
-| `can't open file 'check_week2.py'` | `cd week2` 로 과제 폴더까지 들어가야 함 |
-| 마이크 / 스피커 관련 문제 | `week2/README.md` 맨 아래 "자주 나오는 문제" 참고 |
-| `conda env create`가 `prefix already exists`로 실패 | 이미 만들어져 있음. `conda activate eece101`만 하면 됨 |
-| 환경 만들다 중간에 멈춤/실패 | `conda env remove -n eece101` 후 다시 `conda env create -f environment.yml` |
-| 데이터 다운로드가 멈춘 것 같음 | 진행률이 조금이라도 올라가면 정상 (서버가 느림). 끊겼으면 `python download_data.py` 다시 실행 → 이어받기 |
-| `파일이 깨져 있어서 지웠습니다` | `python download_data.py` 다시 실행, 또는 조교에게 `data` 폴더 받기 |
-| `CIFAR-100 ... not found` / `Dataset not found` | 4단계를 안 했음. `data` 폴더 넣기 또는 `python download_data.py` |
-| Miniconda/Anaconda를 쓰는데 "Terms of Service" 오류 | 오류 메시지의 `conda tos accept ...` 명령을 실행해 약관에 동의하거나, Miniforge로 설치 |
+| `'conda'은(는) 내부 또는 외부 명령...이 아닙니다` | 일반 명령 프롬프트 대신 **Miniforge Prompt** 에서 실행 |
+| `[error] conda env 'eece101' not found` | 1-3 (환경 만들기)를 안 했음 |
+| `'scripts_windows_rx.bat' is not recognized` | `week2` 폴더에서 실행해야 함. PowerShell 이면 앞에 `.\` |
+| `No such file or directory: scripts_mac_rx.sh` | `cd ~/EECE101/week2` 로 폴더 이동 |
+| `chirp 를 하나도 못 찾았습니다` | 소리가 마이크에 안 들어옴. 볼륨 올리기, 30cm 이내로 가깝게, 마이크 허락(1-4) 확인 |
+| `CRC 실패` 가 많고 사진에 얼룩 | 더 가깝게, 조용하게, 스피커를 상대 마이크 쪽으로. `--baud 200` 을 썼다면 빼기 |
+| 사진 일부가 회색 | 그 부분 묶음을 못 받음. 위와 같음. 녹음이 일찍 끝났다면 받는 쪽을 먼저 시작했는지 확인 |
+| `녹음이 송신 도중에 끝난 것 같습니다` | 받는 쪽에 보내는 쪽과 같은 B / `--tiles` 를 주기 (녹음 시간이 그걸로 정해짐) |
+| `보낸 사진이 이 컴퓨터의 images 폴더에 없음` | 정상 (받은 사진만 보여 줌). 원본 비교를 하려면 같은 사진 파일을 받는 쪽 `images` 에도 넣기 |
+| `conda env create` 가 `prefix already exists` | 이미 만들어져 있음. 그대로 쓰면 됨 |
+| 환경 만들다 실패 | `conda env remove -n eece101` 후 다시 `conda env create -f environment.yml` |
+| 마이크를 바꾸고 싶음 | `python -m sounddevice` 로 번호 확인 후 받는 쪽 명령 뒤에 `--device 번호` |

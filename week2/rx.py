@@ -48,16 +48,19 @@ def record(seconds, fs, device=None):
 def receive(sig, model, x_true, cfg, quiet=False):
     """수신 신호 -> (결과 dict, 복원 이미지, 채널 없는 복원 이미지). quiet=False 면 문제 진단도 출력
     x_true=None 이면 원본 없이 받기만 한다 (BER/PSNR 생략)"""
-    s = 32 * cfg.tiles
-    ref = x_true if x_true is not None else torch.zeros(1, 3, s, s)      # 비트 수/모양만 알면 됨
-    true_bits, shape = codec.image_to_bits(model, ref, cfg.gray, cfg.interleave)
-    n_frames = int(np.ceil(len(true_bits) / cfg.frame_bits))
+    gh, gw = getattr(cfg, "grid", None) or (cfg.tiles, cfg.tiles)
+    ref = x_true if x_true is not None else torch.zeros(1, 3, 32 * gh, 32 * gw)   # 비트 수/모양만 알면 됨
+    true_bits, shape = codec.image_to_bits(model, ref, cfg.gray, cfg.interleave)   # 사진 부분 (정보 비트 제외)
+    n_all = codec.INFO_LEN + len(true_bits)
+    n_frames = int(np.ceil(n_all / cfg.frame_bits))
 
     frames = modem.decode_frames(sig, cfg)
-    bits, valid = modem.assemble_bits(frames, len(true_bits), cfg.frame_bits)
+    bits, valid = modem.assemble_bits(frames, n_all, cfg.frame_bits)
+    bits, valid = bits[codec.INFO_LEN:], valid[codec.INFO_LEN:]                   # 사진 부분만
 
-    x_rx = codec.bits_to_image(model, bits, shape, valid, cfg.gray, cfg.interleave)
-    x_clean = codec.bits_to_image(model, true_bits, shape, None, cfg.gray, cfg.interleave) if x_true is not None else None
+    x_rx = codec.bits_to_image(model, bits, shape, valid, cfg.gray, cfg.interleave, (gh, gw))
+    x_clean = codec.bits_to_image(model, true_bits, shape, None, cfg.gray, cfg.interleave, (gh, gw)) \
+        if x_true is not None else None
     n_rx = valid.sum() if x_true is not None else 0
     rep = dict(
         frames_total=n_frames,
@@ -154,33 +157,80 @@ def save_figure(x_true, x_clean, x_rx, rep, path, show=False):
         os.startfile(path)
 
 
+def tx_duration(model, cfg):
+    """같은 옵션(B, tiles, baud ...)으로 보내는 소리의 길이 (s)"""
+    s = 32 * cfg.tiles                                     # 정사각형 사진 = 가장 긴 경우
+    n_bits = codec.INFO_LEN + len(codec.image_to_bits(model, torch.zeros(1, 3, s, s), cfg.gray, cfg.interleave)[0])
+    sig, _ = modem.build_tx_signal(np.zeros(n_bits, np.uint8), cfg.B, cfg)
+    return len(sig) / cfg.fs
+
+
+def match_sender(sig, args):
+    """소리에서 보내는 쪽 설정을 읽어 맞춘다: 헤더의 B, 첫 프레임 맨 앞의 사진 정보(지문, 조각 배치).
+    args.B, args.grid, args.sent_id 를 정하고, B 가 바뀌었으면 True (모델을 다시 불러야 함)"""
+    args.grid, args.sent_id = None, None
+    frames = modem.decode_frames(sig, args)
+    if not frames:
+        args.grid = (args.tiles, args.tiles)
+        return False
+    B = int(np.bincount([f['B'] for f in frames]).argmax())            # 여러 프레임의 다수결
+    total = int(np.bincount([f['total'] for f in frames]).argmax())
+    first = [f for f in frames if f['seq'] == 0 and len(f['payload']) >= codec.INFO_LEN]
+    if first:
+        img_id, (gh, gw) = codec.parse_info(first[0]['payload'])
+        need = int(np.ceil((codec.INFO_LEN + 512 * B * gh * gw) / args.frame_bits))
+        if 1 <= gh <= 15 and 1 <= gw <= 15 and need == total:             # 프레임 수와 맞으면 믿는다
+            args.grid, args.sent_id = (gh, gw), img_id
+    if args.grid is None:                                                # 첫 프레임을 못 읽음: 프레임 수로 추정
+        t = max(1, int(round(((total * args.frame_bits - codec.INFO_LEN) / (512 * B)) ** 0.5)))
+        args.grid = (t, t)
+    changed = B in (2, 4, 8) and B != args.B
+    if changed:
+        print(f"[자동] 보내는 쪽은 B={B} 입니다 (받는 쪽 설정 B={args.B}). 맞춰서 복원합니다.")
+        args.B, args.ckpt = B, None
+    return changed
+
+
 def main():
     parser = argparse.ArgumentParser()
     modem.add_modem_args(parser)
     codec.add_codec_args(parser)
     parser.add_argument("--wav", type=str, default=None, help="복조할 wav 파일")
-    parser.add_argument("--record", type=float, default=None, help="마이크 녹음 시간 (s)")
-    parser.add_argument("--save_wav", type=str, default=None, help="녹음을 wav로 저장")
+    parser.add_argument("--record", type=float, default=None,
+                        help="마이크 녹음 시간 (s). 안 주면 옵션으로 계산한 송신 길이 + 12초")
+    parser.add_argument("--save_wav", type=str, default=None, help="녹음 저장 위치 (기본 results/rx_record.wav)")
     parser.add_argument("--device", default=None, help="sounddevice 입력 장치 번호/이름")
     parser.add_argument("--fig", type=str, default=os.path.join(codec.RESULT_DIR, "rx_result.png"))
+    parser.add_argument("--no_show", action="store_true", help="결과 그림을 자동으로 열지 않음")
     args = parser.parse_args()
 
     model, _ = codec.load_model(args)
-    # 원본을 주면(--image / --index) BER/PSNR 까지, 안 주면 받은 이미지만
-    x_true = codec.load_image(args) if (args.image or args.index is not None) else None
 
     if args.wav:
         sig = read_wav(args.wav, args.fs)
-    elif args.record:
-        sig = record(args.record, args.fs, args.device)
-        if args.save_wav:
-            wavfile.write(args.save_wav, args.fs, (sig * 32767).astype(np.int16))
     else:
-        parser.error("--wav 또는 --record 를 지정하세요")
+        if not args.record:                                # 녹음 시간: 보내는 소리 길이 + 여유 12초
+            args.record = float(np.ceil(tx_duration(model, args)) + 12)
+        sig = record(args.record, args.fs, args.device)
+        args.save_wav = args.save_wav or os.path.join(codec.RESULT_DIR, "rx_record.wav")
+        os.makedirs(os.path.dirname(os.path.abspath(args.save_wav)), exist_ok=True)
+        wavfile.write(args.save_wav, args.fs, (sig * 32767).astype(np.int16))
+        print("녹음 저장:", args.save_wav, f" (다시 복조: python rx.py --wav {args.save_wav} + 같은 옵션)")
 
+    if match_sender(sig, args):                            # 보내는 쪽 B 가 다르면 모델을 다시 불러옴
+        model, _ = codec.load_model(args)
+    gh, gw = args.grid
+    print(f"[자동] 사진 크기 {32 * gw}x{32 * gh} (32x32 조각 가로 {gw} x 세로 {gh})")
+
+    # 원본 사진: --image / --index 로 주거나, 없으면 보낸 사진의 지문으로 images 폴더에서 찾는다
+    if not args.image and args.index is None and args.sent_id is not None:
+        args.image = codec.find_image(args.sent_id)
+        print(f"[자동] 보낸 사진: {os.path.basename(args.image)} (images 폴더에서 찾음) -> 원본과 비교합니다"
+              if args.image else "[자동] 보낸 사진이 이 컴퓨터의 images 폴더에 없음 -> 받은 사진만 보여 줍니다")
+    x_true = codec.load_image(args) if (args.image or args.index is not None) else None
     rep, x_rx, x_clean = receive(sig, model, x_true, args)
     print_report(rep)
-    save_figure(x_true, x_clean, x_rx, rep, args.fig, show=True)
+    save_figure(x_true, x_clean, x_rx, rep, args.fig, show=not args.no_show)
 
 
 if __name__ == "__main__":

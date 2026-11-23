@@ -1,27 +1,26 @@
 #!/bin/bash
-# Mac receiver. Use the same B (and options) as the sender.
-#   bash scripts_mac_rx.sh                      -> B=4
-#   bash scripts_mac_rx.sh 8                    -> B=8
-#   bash scripts_mac_rx.sh 8 --baud 200         -> faster (default is --baud 100 --gray, same as the sender script)
-#   bash scripts_mac_rx.sh 4 --tiles 2 --image Lenna.png  -> 64x64, compare with the original
-B=${1:-4}
-shift
-case $B in
-  2) DUR10=92  ;;   # 1/24, 9.2 s at 200 baud
-  4) DUR10=175 ;;   # 1/12, 17.5 s
-  8) DUR10=340 ;;   # 1/6,  34.0 s
-  *) echo "B must be 2, 4 or 8"; exit 1 ;;
-esac
-BAUD=100   # default: slow + Gray code (robust to room echo). Override with --baud 200
-TILES=1
-ARGS=("$@")
-for ((i = 0; i < ${#ARGS[@]}; i++)); do
-  [ "${ARGS[$i]}" = "--baud" ] && BAUD=${ARGS[$((i + 1))]%.*}
-  [ "${ARGS[$i]}" = "--tiles" ] && TILES=${ARGS[$((i + 1))]}
-done
-REC=$(( (DUR10 * TILES * TILES * 200 / BAUD + 9) / 10 + 12 ))   # sound length + 12 s margin
-TAG="B$B"; [ "$TILES" != 1 ] && TAG="${TAG}_tiles$TILES"; [ "$BAUD" != 100 ] && TAG="${TAG}_baud$BAUD"
+# Mac RECEIVER.  Usage:  bash scripts_mac_rx.sh [B] [options]
+#   bash scripts_mac_rx.sh                               -> B=4, show the received image
+#   bash scripts_mac_rx.sh 4 --tiles 2   -> 64x64. The sent photo is found in images/ automatically
+# Start this FIRST, then the sender. Recording time is computed from the options.
+# ---- first argument = B (2/4/8, default 4), the rest are passed to python ----
+B=4
+case "$1" in 2|4|8) B=$1; shift ;; esac
 cd "$(dirname "$0")"
-eval "$(conda shell.bash hook)" 2>/dev/null && conda activate eece101
-echo "B=$B, tiles=$TILES, baud=$BAUD, recording ${REC} s -> start the sender after '녹음 시작'"
-python rx.py --B "$B" --record "$REC" --save_wav "rx_$TAG.wav" --fig "results/rx_$TAG.png" --baud 100 --gray "$@"
+# ---- find conda and activate eece101 ----
+if [ "$CONDA_DEFAULT_ENV" != "eece101" ]; then
+  if ! command -v conda >/dev/null 2>&1; then
+    for d in "$HOME/miniforge3" "$HOME/miniconda3" "$HOME/anaconda3" "$HOME/opt/anaconda3" \
+             "/opt/homebrew/Caskroom/miniforge/base" "/opt/miniconda3" "/usr/local/miniforge3"; do
+      [ -f "$d/etc/profile.d/conda.sh" ] && . "$d/etc/profile.d/conda.sh" && break
+    done
+  else
+    eval "$(conda shell.bash hook)"
+  fi
+  conda activate eece101 2>/dev/null
+fi
+if ! python -c "import sounddevice" 2>/dev/null; then
+  echo "[error] conda env 'eece101' not found. See README: conda env create -f environment.yml"
+  exit 1
+fi
+python rx.py --B "$B" --baud 100 --gray "$@"

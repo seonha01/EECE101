@@ -28,18 +28,18 @@ PLAY = True      # True: 스피커로 바로 재생 (--out 만 주면 저장만)
 
 
 def make_tx_signal(model, x, cfg):
-    """이미지 한 장 -> (오디오 신호, 송신 비트열, 프레임 수)"""
-    bits, _ = codec.image_to_bits(model, x, cfg.gray, cfg.interleave)
+    """이미지 한 장 -> (오디오 신호, 송신 비트열, 프레임 수). 맨 앞에 사진 정보(지문, 조각 배치)를 붙인다"""
+    img_bits, _ = codec.image_to_bits(model, x, cfg.gray, cfg.interleave)
+    bits = np.concatenate([codec.info_bits(cfg.image_id, cfg.grid), img_bits])
     sig, n_frames = modem.build_tx_signal(bits, model.scalar_quantization.B, cfg)
     return sig, bits, n_frames
 
 
 def rx_options(args):
     # 받는 쪽이 같게 맞춰야 하는 옵션만 (기본값과 다른 것)
+    # 받는 쪽은 B, 조각 배치, 보낸 사진을 소리에서 알아내지만, 녹음 시간을 맞추려면 B 와 tiles 를 같게
     opts = [f"--B {args.B}"] + ([f"--tiles {args.tiles}"] if args.tiles > 1 else [])
     opts = opts + ([f"--method {args.method}"] if args.method != "uniform" else [])
-    if args.image and os.path.dirname(os.path.abspath(args.image)) == codec.IMAGE_DIR:
-        opts.append(f"--image {os.path.basename(args.image)}")   # images 폴더는 git 에 있으니 받는 쪽도 원본 비교 가능
     for key, default in [("baud", 200), ("f0", 3000), ("f1", 5000), ("frame_bits", 256)]:
         if getattr(args, key) != default:
             opts.append(f"--{key} {getattr(args, key):g}")
@@ -88,12 +88,14 @@ def main():
         sys.exit(f"프레임이 {n_frames}개라 너무 많습니다 (최대 255). --B 나 --tiles 를 줄이세요.")
 
     dur = len(sig) / args.fs
-    raw = x.numel() * 8                                  # 원본: 32x32x3 화소 x 8비트
-    print(f"이미지: {args.image or f'CIFAR-100 테스트 {args.index}번'}")
-    print(f"압축: 원본 {raw:,} bit -> {len(bits):,} bit  (1/{raw / len(bits):g},  {cfg['method']} B={cfg['B']})")
+    raw, n_img = x.numel() * 8, len(bits) - codec.INFO_LEN    # 원본: 화소 x 3색 x 8비트
+    gh, gw = args.grid
+    print(f"이미지: {args.image or f'CIFAR-100 테스트 {args.index}번'}  ->  {32 * gw}x{32 * gh} "
+          f"(32x32 조각 가로 {gw} x 세로 {gh})")
+    print(f"압축: 원본 {raw:,} bit -> {n_img:,} bit  (1/{raw / n_img:g},  {cfg['method']} B={cfg['B']})")
     print(f"소리: 프레임 {n_frames}개 x {args.frame_bits} bit  |  길이 {dur:.1f} s")
     print("받는 쪽 명령:")
-    print("  python rx.py " + rx_options(args) + f" --record {int(np.ceil(dur)) + 8}")
+    print("  python rx.py " + rx_options(args) + "    (녹음 시간은 rx.py 가 같은 옵션으로 계산)")
 
     if args.out:
         wavfile.write(args.out, args.fs, (sig * 32767).astype(np.int16))

@@ -7,6 +7,7 @@
 """
 import os
 import sys
+import hashlib
 import numpy as np
 import torch
 
@@ -19,6 +20,12 @@ sys.path.insert(0, WEEK1)
 import utils                                              # noqa: E402
 from models.channel import index_to_bits, bits_to_index   # noqa: E402
 from models.metrics import PSNR                           # noqa: E402
+from modem import int_to_bits, bits_to_int                # noqa: E402
+
+# 사진 정보: 사진 지문(32) + 조각 배치 세로(4) + 가로(4). 비트열 맨 앞에 3번 반복해서 붙인다
+INFO_BITS = 40
+INFO_REP = 3
+INFO_LEN = INFO_BITS * INFO_REP
 
 
 def add_codec_args(parser):
@@ -33,7 +40,7 @@ def add_codec_args(parser):
     g.add_argument("--image", type=str, default=None,
                    help="직접 고른 사진 파일 (가운데를 정사각형으로 잘라 32x32로 축소). 폴더를 주면 가장 최근 사진")
     g.add_argument("--tiles", type=int, default=1,
-                   help="해상도: 사진을 (32*tiles)x(32*tiles) 로 줄이고 32x32 조각 tiles x tiles 개로 나눠 보냄 (송수신 같게)")
+                   help="해상도: 사진의 긴 쪽을 32x32 조각 tiles 개로 나눠 보냄 (짧은 쪽은 비율대로)")
     g.add_argument("--gray", action="store_true", help="Gray 코드 비트 매핑")
     g.add_argument("--interleave", action="store_true",
                    help="latent 순서를 섞어 보냄 (프레임 손실이 이미지 한 곳에 몰리지 않게)")
@@ -68,9 +75,32 @@ def newest_image(folder):
     return max(files, key=os.path.getmtime)
 
 
+def image_id(path):
+    """사진 지문: 파일 내용으로 만든 32비트 숫자. 받는 쪽이 images 폴더에서 같은 사진을 찾을 때 쓴다"""
+    with open(path, "rb") as f:
+        return int.from_bytes(hashlib.sha1(f.read()).digest()[:4], "big")
+
+
+def find_image(img_id, folder=IMAGE_DIR):
+    """지문이 같은 (비트 3개까지 틀려도 되는) 사진 파일. 없으면 None"""
+    for f in sorted(list_images(folder)):
+        if bin(image_id(f) ^ img_id).count("1") <= 3:
+            return f
+    return None
+
+
+def grid_for(w, h, tiles):
+    """사진 비율에 맞는 조각 배치 (세로, 가로): 긴 쪽이 tiles 개"""
+    if w >= h:
+        return max(1, round(tiles * h / w)), tiles
+    return tiles, max(1, round(tiles * w / h))
+
+
 def load_image(args):
-    """(1,3,S,S) 텐서 (S = 32 x tiles), 값 범위 [-0.5, 0.5]"""
-    size = 32 * getattr(args, "tiles", 1)
+    """(1,3,32*세로,32*가로) 텐서, 값 범위 [-0.5, 0.5]. args.grid (조각 배치), args.image_id 도 정한다
+    args.grid 가 이미 있으면 그 배치로 (받는 쪽이 보내는 쪽에 맞출 때)"""
+    tiles = getattr(args, "tiles", 1)
+    grid = getattr(args, "grid", None)
     if args.image:
         from PIL import Image
         if not os.path.exists(args.image) and os.path.exists(os.path.join(IMAGE_DIR, args.image)):
@@ -79,29 +109,49 @@ def load_image(args):
             args.image = newest_image(args.image)
         img = Image.open(args.image).convert("RGB")
         w, h = img.size
-        s = min(w, h)                                   # 가운데 정사각형만 (찌그러지지 않게)
-        img = img.crop(((w - s) // 2, (h - s) // 2, (w - s) // 2 + s, (h - s) // 2 + s))
-        img = img.resize((size, size), Image.LANCZOS)
+        gh, gw = grid or grid_for(w, h, tiles)
+        if w * gh > h * gw:                             # 배치 비율보다 가로가 길면 양옆을 조금 자름
+            nw = round(h * gw / gh)
+            img = img.crop(((w - nw) // 2, 0, (w - nw) // 2 + nw, h))
+        else:                                           # 세로가 길면 위아래를 조금 자름
+            nh = round(w * gh / gw)
+            img = img.crop((0, (h - nh) // 2, w, (h - nh) // 2 + nh))
+        img = img.resize((32 * gw, 32 * gh), Image.LANCZOS)
+        args.grid, args.image_id = (gh, gw), image_id(args.image)
         return utils.TRANSFORM(img).unsqueeze(0)
     if args.index is None:
         args.index = 0
     import torchvision.datasets as datasets
     utils.ensure_cifar100()                     # 없으면 download_data.py 로 받기 (이어받기 지원)
     val = datasets.CIFAR100(root=utils.DATA_ROOT, train=False, download=False, transform=utils.TRANSFORM)
+    gh, gw = grid or (tiles, tiles)
+    args.grid, args.image_id = (gh, gw), 0
     x = val[args.index][0].unsqueeze(0)
-    return x if size == 32 else torch.nn.functional.interpolate(x, size=(size, size), mode="bilinear")
+    return x if (gh, gw) == (1, 1) else torch.nn.functional.interpolate(x, size=(32 * gh, 32 * gw), mode="bilinear")
+
+
+def info_bits(img_id, grid):
+    """사진 정보 비트 (3번 반복)"""
+    one = np.concatenate([int_to_bits(img_id, 32), int_to_bits(grid[0], 4), int_to_bits(grid[1], 4)])
+    return np.tile(one, INFO_REP).astype(np.uint8)
+
+
+def parse_info(bits):
+    """사진 정보 비트 -> (지문, (세로, 가로)). 3번 반복을 비트마다 다수결"""
+    one = (bits[:INFO_LEN].reshape(INFO_REP, INFO_BITS).sum(axis=0) * 2 > INFO_REP).astype(np.uint8)
+    return bits_to_int(one[:32]), (bits_to_int(one[32:36]), bits_to_int(one[36:40]))
 
 
 def to_patches(x):
-    """(1,3,32N,32N) -> (N*N,3,32,32): 왼쪽 위부터 가로로 조각내기"""
-    n = x.shape[-1] // 32
-    return x.reshape(1, 3, n, 32, n, 32).permute(0, 2, 4, 1, 3, 5).reshape(n * n, 3, 32, 32)
+    """(1,3,32*세로,32*가로) -> (세로*가로,3,32,32): 왼쪽 위부터 가로로 조각내기"""
+    gh, gw = x.shape[-2] // 32, x.shape[-1] // 32
+    return x.reshape(1, 3, gh, 32, gw, 32).permute(0, 2, 4, 1, 3, 5).reshape(gh * gw, 3, 32, 32)
 
 
-def from_patches(p):
-    """(N*N,3,32,32) -> (1,3,32N,32N): 조각 다시 붙이기"""
-    n = int(round(p.shape[0] ** 0.5))
-    return p.reshape(n, n, 3, 32, 32).permute(2, 0, 3, 1, 4).reshape(1, 3, 32 * n, 32 * n)
+def from_patches(p, grid=None):
+    """(세로*가로,3,32,32) -> (1,3,32*세로,32*가로): 조각 다시 붙이기"""
+    gh, gw = grid or (int(round(p.shape[0] ** 0.5)),) * 2
+    return p.reshape(gh, gw, 3, 32, 32).permute(2, 0, 3, 1, 4).reshape(1, 3, 32 * gh, 32 * gw)
 
 
 @torch.no_grad()
@@ -115,7 +165,7 @@ def image_to_bits(model, x, gray=False, interleave=False):
 
 
 @torch.no_grad()
-def bits_to_image(model, bits, shape, valid=None, gray=False, interleave=False):
+def bits_to_image(model, bits, shape, valid=None, gray=False, interleave=False, grid=None):
     """비트열 -> 복원 이미지. valid(비트별 수신 여부)가 False인 latent는 0으로"""
     sq = model.scalar_quantization
     n = int(np.prod(shape))
@@ -127,7 +177,7 @@ def bits_to_image(model, bits, shape, valid=None, gray=False, interleave=False):
         ok = np.zeros(n, dtype=bool)
         ok[perm] = valid.reshape(-1, sq.B).all(axis=1)   # 인터리빙 되돌리기
         z_q = torch.where(torch.from_numpy(ok).view(shape), z_q, torch.zeros_like(z_q))
-    return from_patches(model.decoder(z_q.permute(0, 3, 1, 2).contiguous()))
+    return from_patches(model.decoder(z_q.permute(0, 3, 1, 2).contiguous()), grid)
 
 
 def psnr(x_hat, x):
