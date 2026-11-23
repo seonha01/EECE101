@@ -31,7 +31,7 @@ def main():
     parser.add_argument("--tag", type=str, default="", help="그림 파일 이름에 붙일 말 (예: --tag baud400)")
     args = parser.parse_args()
 
-    model, _ = utils.load_checkpoint(args.ckpt)
+    model, _ = codec.load_model(args)
     x = codec.load_image(args)
     sig, bits, n_frames = make_tx_signal(model, x, args)
     print(f"송신: {len(bits)} bit, {n_frames} 프레임, {len(sig) / args.fs:.1f} s"

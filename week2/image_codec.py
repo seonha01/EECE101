@@ -22,10 +22,15 @@ from models.metrics import PSNR                           # noqa: E402
 
 def add_codec_args(parser):
     g = parser.add_argument_group("image codec")
-    g.add_argument("--ckpt", type=str, default=os.path.join(utils.CKPT_DIR, "uniform_B4.pth"),
-                   help="Week 1 체크포인트 (기본: week1/checkpoints/uniform_B4.pth)")
+    g.add_argument("--B", type=int, default=4, choices=[2, 4, 8],
+                   help="latent 값 하나당 비트 수 = 압축률 (2: 1/24, 4: 1/12, 8: 1/6)")
+    g.add_argument("--method", type=str, default="uniform", choices=["uniform", "mulaw", "lloydmax", "learned"],
+                   help="1주차 양자화 방법")
+    g.add_argument("--ckpt", type=str, default=None,
+                   help="체크포인트 직접 지정 (기본: week1/checkpoints/{method}_B{B}.pth)")
     g.add_argument("--index", type=int, default=0, help="CIFAR-100 테스트 이미지 번호")
-    g.add_argument("--image", type=str, default=None, help="직접 고른 이미지 파일 (32x32로 축소)")
+    g.add_argument("--image", type=str, default=None,
+                   help="직접 고른 사진 파일 (가운데를 정사각형으로 잘라 32x32로 축소). 폴더를 주면 가장 최근 사진")
     g.add_argument("--gray", action="store_true", help="Gray 코드 비트 매핑")
     g.add_argument("--interleave", action="store_true",
                    help="latent 순서를 섞어 보냄 (프레임 손실이 이미지 한 곳에 몰리지 않게)")
@@ -37,11 +42,34 @@ def interleaver(n, enable):
     return np.random.default_rng(1234).permutation(n) if enable else np.arange(n)
 
 
+def load_model(args):
+    """--ckpt 가 없으면 --method, --B 로 체크포인트를 고른다. (model, 설정) 반환"""
+    if args.ckpt is None:
+        args.ckpt = os.path.join(utils.CKPT_DIR, f"{args.method}_B{args.B}.pth")
+    model, cfg = utils.load_checkpoint(args.ckpt)
+    args.B, args.method = cfg['B'], cfg['method']        # --ckpt 로 직접 준 경우에도 맞춰 둠
+    return model, cfg
+
+
+def newest_image(folder):
+    exts = (".jpg", ".jpeg", ".png", ".bmp", ".webp", ".gif")
+    files = [os.path.join(folder, f) for f in os.listdir(folder) if f.lower().endswith(exts)]
+    if not files:
+        raise SystemExit(f"{folder} 폴더에 사진이 없습니다")
+    return max(files, key=os.path.getmtime)
+
+
 def load_image(args):
     """(1,3,32,32) 텐서, 값 범위 [-0.5, 0.5]"""
     if args.image:
         from PIL import Image
-        img = Image.open(args.image).convert("RGB").resize((32, 32))
+        if os.path.isdir(args.image):
+            args.image = newest_image(args.image)
+        img = Image.open(args.image).convert("RGB")
+        w, h = img.size
+        s = min(w, h)                                   # 가운데 정사각형만 (찌그러지지 않게)
+        img = img.crop(((w - s) // 2, (h - s) // 2, (w - s) // 2 + s, (h - s) // 2 + s))
+        img = img.resize((32, 32), Image.LANCZOS)
         return utils.TRANSFORM(img).unsqueeze(0)
     import torchvision.datasets as datasets
     utils.ensure_cifar100()                     # 없으면 download_data.py 로 받기 (이어받기 지원)

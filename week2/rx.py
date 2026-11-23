@@ -137,7 +137,7 @@ def main():
     parser.add_argument("--fig", type=str, default=os.path.join(codec.RESULT_DIR, "rx_result.png"))
     args = parser.parse_args()
 
-    model, _ = utils.load_checkpoint(args.ckpt)
+    model, _ = codec.load_model(args)
     x_true = codec.load_image(args)
 
     if args.wav:
