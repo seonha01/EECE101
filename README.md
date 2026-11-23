@@ -146,6 +146,17 @@ bash scripts_mac_tx.sh 8 --tiles 2          (Mac)
 | `--baud 200` | 2배 빠르게 (방이 울리면 오류가 늘어남) | 기본 `100` |
 | `--interleave` | 묶음을 잃어도 손상이 한 곳에 몰리지 않고 흩어짐 (양쪽 같게) | |
 
+### 자주 쓰는 명령 (받는 쪽 먼저, 양쪽 같은 숫자와 옵션)
+
+| 해상도 | 받는 쪽 | 보내는 쪽 | 시간 (B=4) |
+|---|---|---|---|
+| 32x32 | `bash scripts_mac_rx.sh 4` | `scripts_windows_tx.bat 4` | 32초 |
+| 64x64 | `bash scripts_mac_rx.sh 4 --tiles 2` | `scripts_windows_tx.bat 4 --tiles 2` | 2분 |
+| 96x96 | `bash scripts_mac_rx.sh 4 --tiles 3` | `scripts_windows_tx.bat 4 --tiles 3` | 4분 40초 |
+| 96x96 (빠르게) | `bash scripts_mac_rx.sh 2 --tiles 3` | `scripts_windows_tx.bat 2 --tiles 3` | 2분 20초 |
+
+받는 쪽과 보내는 쪽이 반대면 `scripts_windows_rx.bat`, `bash scripts_mac_tx.sh` 로 바꿉니다 (뒤 옵션은 같음).
+
 ### 보내는 시간 (기본 100 baud, 정사각형 사진)
 
 | | B = 2 | B = 4 | B = 8 |
