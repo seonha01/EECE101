@@ -25,13 +25,13 @@
 
 ### 1-1. 코드 받기
 
-1. **https://github.com/seonha01/EECE101/archive/refs/heads/main.zip** 에서 ZIP 을 받습니다.
-2. 압축을 풀고 `EECE101-main` 폴더 이름을 `EECE101` 로 바꿔 옮깁니다.
-   - **Windows**: `C:\EECE101` (경로에 한글, 띄어쓰기가 없게)
-   - **Mac**: `~/EECE101` (홈 폴더)
+1. **https://github.com/seonha01/WCML-EECE199/archive/refs/heads/main.zip** 에서 ZIP 을 받습니다.
+2. 압축을 풀고 `WCML-EECE199-main` 폴더 이름을 `WCML-EECE199` 로 바꿔 옮깁니다.
+   - **Windows**: `C:\WCML-EECE199` (경로에 한글, 띄어쓰기가 없게)
+   - **Mac**: `~/WCML-EECE199` (홈 폴더)
 3. 폴더 안에 `README.md`, `environment.yml`, `week1`, `week2` 가 있어야 합니다.
 
-git: `git clone https://github.com/seonha01/EECE101.git` (새 버전은 `git pull`)
+git: `git clone https://github.com/seonha01/WCML-EECE199.git` (새 버전은 `git pull`)
 
 ### 1-2. Miniforge(conda) 설치
 
@@ -58,7 +58,7 @@ Windows 는 **Miniforge Prompt**, Mac 은 **터미널**에서:
 
 | Windows | Mac |
 |---|---|
-| `cd /d C:\EECE101` | `cd ~/EECE101` |
+| `cd /d C:\WCML-EECE199` | `cd ~/WCML-EECE199` |
 | `conda env create -f environment.yml` | `conda env create -f environment.yml` |
 
 마지막에 `conda activate eece101` 안내가 나오면 끝입니다.
@@ -94,7 +94,7 @@ Windows 는 **Miniforge Prompt**, Mac 은 **터미널**에서:
 
 | Windows (Miniforge Prompt) | Mac (터미널) |
 |---|---|
-| `cd /d C:\EECE101\week2` | `cd ~/EECE101/week2` |
+| `cd /d C:\WCML-EECE199\week2` | `cd ~/WCML-EECE199/week2` |
 
 ### 실행
 
@@ -174,7 +174,7 @@ bash scripts_mac_tx.sh 8 --tiles 2          (Mac)
 | `'conda'은(는) 내부 또는 외부 명령...이 아닙니다` | 일반 명령 프롬프트 대신 **Miniforge Prompt** 에서 실행 |
 | `[error] conda env 'eece101' not found` | 1-3 (환경 만들기) 실행 |
 | `'scripts_windows_rx.bat' is not recognized` | `week2` 폴더에서 실행. PowerShell 이면 앞에 `.\` |
-| `No such file or directory: scripts_mac_rx.sh` | `cd ~/EECE101/week2` |
+| `No such file or directory: scripts_mac_rx.sh` | `cd ~/WCML-EECE199/week2` |
 | `chirp 를 하나도 못 찾았습니다` | 소리가 마이크에 안 들어옴. 볼륨 올리기, 30cm 이내로, 마이크 권한(1-4) 확인 |
 | `CRC 실패` 가 많고 사진에 얼룩 | 더 가깝게, 조용하게, 스피커를 상대 마이크 쪽으로. `--baud 200` 을 썼다면 빼기 |
 | 사진 일부가 회색 | 그 묶음을 못 받음. 위와 같음 |
